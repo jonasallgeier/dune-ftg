@@ -1,3 +1,6 @@
-field can be generated from fieldgenerator using the following syntax:
+the field can be generated from fieldgenerator using the following syntax:
 
 \path\to\fieldgenerator .\modelling.ini -output.dune \path\to\output
+
+modifications can be made, for example by using matlabs hdf5 high level functions.
+

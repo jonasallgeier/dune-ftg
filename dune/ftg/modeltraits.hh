@@ -241,10 +241,10 @@ class ModelTraits
         std::vector<int> surf_elec; // vector containing information if electrode is a surface electrode 
 
         // constructor -> reads in the data from file
-        ElectrodeConfiguration (std::string a, int myrank) 
+        ElectrodeConfiguration (std::string electrodefilename, int myrank) 
         {
 	      std::ifstream file_econf; // open the file
-          file_econf.open(a);
+          file_econf.open(electrodefilename);
           if (myrank == 0)
           {          
           std::cout << "Attempting to read electrode configuration file...";

@@ -107,14 +107,14 @@ void transientTransport(int argc, char** argv)
     forwardModelList.add<GeoelectricsModel,TransportModel>(temp_name,std::list<std::string>{"transport"});
   }
   
-  // print information about model list
+  // print information about model list, avoid multiple outputs if run is parallel
   if (helper.rank() == 0)
   forwardModelList.report(std::cout);
 
   // define parameters (input) and measurements (output)
   using ParameterList   = ModelTraits::ParameterList;
   using MeasurementList = ModelTraits::MeasurementList;
-  std::shared_ptr<ParameterList>   parameterList  (new ParameterList("test"));
+  std::shared_ptr<ParameterList>   parameterList  (new ParameterList("./fields/ftg_fields"));
   //std::shared_ptr<ParameterList>   parameterList  (new ParameterList(config));
   std::shared_ptr<MeasurementList> measurementList(new MeasurementList());
   //(*parameterList).generate(); 
