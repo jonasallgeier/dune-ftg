@@ -1,0 +1,962 @@
+// -*- tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+// vi: set et ts=4 sw=2 sts=2:
+#ifndef DUNE_MODELLING_GEOELECTRICS_HH
+#define DUNE_MODELLING_GEOELECTRICS_HH
+
+#include<dune/pdelab/common/referenceelements.hh>
+#include<dune/pdelab/finiteelementmap/p0fem.hh>
+#include<dune/pdelab/constraints/p0.hh>
+#include<dune/pdelab/backend/istl.hh>
+
+#include<dune/modelling/fluxreconstruction.hh>
+#include<dune/modelling/solutionstorage.hh>
+#include<dune/modelling/solvers.hh>
+#include<dune/grid/utility/hierarchicsearch.hh> //jonas
+
+namespace Dune {
+  namespace Modelling {    
+    /**
+     * @brief Parameter class for the geoelectrics equation
+     */
+    template<typename Traits>
+      class ModelParameters<Traits, ModelTypes::Geoelectrics>
+      : public ModelParametersBase<Traits>
+      {
+        using RF = typename Traits::GridTraits::RangeField;
+        //jonas <<
+        //using GridTraits = typename Traits::GridTraits;
+        //using IndexSet = typename GridTraits::GridView::IndexSet;
+        //using GFS        = typename EquationTraits<Traits,ModelTypes::Geoelectrics,Direction::Forward>::GridFunctionSpace;
+        //using GridVector = typename EquationTraits<Traits,ModelTypes::Geoelectrics,Direction::Forward>::GridVector;
+        //using ScalarDGF    = PDELab::DiscreteGridFunction<GFS,GridVector>;
+        // >>jonas
+
+
+        using ParameterList   = typename Traits::ParameterList;
+        using ParameterField  = typename ParameterList::SubRandomField;
+        using MeasurementList = typename Traits::MeasurementList;
+
+        const Traits& traits;        
+        
+        std::shared_ptr<SolutionStorage<Traits,ModelTypes::Geoelectrics,Direction::Forward> > forwardStorage;
+        std::shared_ptr<SolutionStorage<Traits,ModelTypes::Geoelectrics,Direction::Adjoint> > adjointStorage;
+
+        std::shared_ptr<ParameterField> storativityField;
+
+        std::shared_ptr<const ModelParameters<Traits,ModelTypes::Transport> > transportParams; //jonas
+        
+        //const std::shared_ptr<ScalarDGF>    scalar; //jonas
+        //const IndexSet& indexSet; //jonas
+        
+        public:
+        std::string model_name; //jonas
+        int model_number;
+
+
+
+        
+        ModelParameters(const Traits& traits_, const std::string& name)
+          : ModelParametersBase<Traits>(name), traits(traits_)
+        {
+          // access the name of the model to know which electrode is active
+          model_name = name;          
+          std::string model_name_temp = model_name;
+          model_name_temp.erase(0,12); // get rid of "geoelectrics" to get the number n of the model "geoelectricsn"
+          model_number = std::stoi(model_name_temp);
+          //std::cout << "model name is read in... " << model_name << std::endl;
+        }
+
+        /**
+         * @brief Model parameters should exist only once per (named) model
+         */
+        ModelParameters(const ModelParameters& other) = delete;
+
+        /**
+         * @brief Set internal storage object for forward solution
+         */
+        void setStorage(
+            const std::shared_ptr<SolutionStorage<Traits,ModelTypes::Geoelectrics,Direction::Forward> > storage
+            )
+        {
+          forwardStorage = storage;
+        }
+
+        /**
+         * @brief Set internal storage object for adjoint solution
+         */
+        void setStorage(
+            const std::shared_ptr<SolutionStorage<Traits,ModelTypes::Geoelectrics,Direction::Adjoint> > storage
+            )
+        {
+          adjointStorage = storage;
+        }
+
+        /**
+         * @brief Provide access to underlying parameter fields
+         */
+        void setParameterList(const std::shared_ptr<const ParameterList>& list)
+        {
+          //conductivityField = (*list).get("conductivity"); //jonas
+          //storativityField  = (*list).get("storativity_geoelectrics");
+        }
+
+        /**
+         * @brief Provide access to measurement storage object
+         */
+        void setMeasurementList(const std::shared_ptr<const MeasurementList>& list)
+        {
+          // measurements missing
+        }
+
+        /**
+         * @brief Minimum time stepsize accepted by model
+         */
+        RF minTimestep() const
+        {
+          return traits.config().template get<RF>("time.minStep");
+        }
+
+        /**
+         * @brief Maximum time stepsize accepted by model
+         */
+        RF maxTimestep() const
+        {
+          return traits.config().template get<RF>("time.maxStep");
+        }
+        
+        /**
+         * @brief Conductivity value at given position
+         */
+        //template<typename Element, typename Domain, typename Time>          //not needed; jonas
+        //  RF cond(const Element& elem, const Domain& x, const Time& t) const
+        //  {
+        //    if (!conductivityField)
+        //    {
+        //      std::cout << "ModelParameters::cond " << this->name() << " " << this << std::endl;
+        //      DUNE_THROW(Dune::Exception,"conductivity field not set in geoelectrics model parameters");
+        //    }
+        //
+        //    typename Traits::GridTraits::Scalar value;
+        //    (*conductivityField).evaluate(elem,x,value);
+        //    return value[0];
+        //  }
+        
+        
+        
+        
+        //the total number of electrodes
+        //int number_of_electrodes() const //jonas
+        //{
+        //  return traits.electrodeconfiguration.no_electrodes;
+        //};
+        
+        //vector containing the electrodes names
+        //std::vector<int> electrodes_names() const //jonas
+        //{
+        //  return traits.electrodeconfiguration.name_elec;
+        //};
+        
+        //vector containing the x values of the electrodes
+        //std::vector<double> electrodes_x() const //jonas
+        //{
+        //  return traits.electrodeconfiguration.x_elec;
+        //};
+        
+        //vector containgin the y values of the electrodes
+        //std::vector<double> electrodes_y() const //jonas
+        //{
+        //  return traits.electrodeconfiguration.y_elec;
+        //};
+
+        //vector containgin the z values of the electrodes
+        //std::vector<double> electrodes_z() const //jonas
+        //{
+        //  return traits.electrodeconfiguration.z_elec;
+        //};
+
+        // the cell with this index contains the electrode for this model
+        auto electrodecell() const
+        {
+          auto all_electrodecells = traits.read_electrodecells();
+          return all_electrodecells[model_number];
+        };
+
+        //std::vector<double> electrodecell_midpoint() const
+        //{
+        //  auto mytestvector = std::vector<double>(3);
+        //  mytestvector[0] = traits.electrodeconfiguration.x_elec[model_number];
+        //  mytestvector[1] = traits.electrodeconfiguration.y_elec[model_number];
+        //  mytestvector[2] = traits.electrodeconfiguration.z_elec[model_number];
+        //  return mytestvector;
+        //};
+        
+        // provide a gridview for the index set
+        //auto mygridview() const
+        //{
+        //  return traits.grid().leafGridView();
+        //};
+        
+        // provide an index set to compare cells with the electrode cell
+        auto& index_set() const
+        {
+          return traits.grid().leafGridView().indexSet();
+        };
+  
+
+        
+        
+        /**
+         * @brief Storativity value at given position
+         */
+         /* jonas, not needed, stationary for a single time step!
+        template<typename Element, typename Domain, typename Time>
+          RF stor(const Element& elem, const Domain& x, const Time& t) const
+          {
+            if (!storativityField)    //jonas
+            {
+              std::cout << "ModelParameters::stor " << this->name() << " " << this << std::endl;
+              DUNE_THROW(Dune::Exception,"storativity field not set in geoelectrics model parameters");
+            }
+
+            typename Traits::GridTraits::Scalar value;
+            (*storativityField).evaluate(elem,x,value);
+            return value[0];
+          }
+          */
+
+        /**
+         * @brief el. conductivity based on concentration transformation in each element; jonas
+         */
+        template<typename Element, typename Domain, typename Time>
+          RF cond (const Element& elem, const Domain& x, const Time& time) const
+          {
+            if (!transportParams)
+              DUNE_THROW(Dune::Exception,"transport model parameters not set in geoelectrics model parameters");
+            
+            //transform concentration to an electric conductivity
+            RF transformation_factor1 = 0.06;
+            RF transformation_factor2 = 0.03;
+            return (*transportParams).concentration(elem,x,time)*transformation_factor1+transformation_factor2;
+          }
+
+        /**
+         * @brief Water flux across given interface
+         */
+        template<typename Intersection, typename IDomain, typename Time>
+          RF flux(const Intersection& is, const IDomain& x, const Time& time) const
+          {
+            typename Traits::GridTraits::Vector localFlux;
+            const auto& global  = is.geometry().global(x);
+            const auto& xInside = is.inside().geometry().local(global);
+            (*forwardStorage).flux(time,is.inside(),xInside,localFlux);
+
+            return localFlux * is.unitOuterNormal(x);
+          }
+
+        /**
+         * @brief Maximum water flux on element (for CFL condition)
+         */
+        template<typename Element, typename Time>
+          RF maxFluxNorm(const Element& elem, const Time& time) const
+          {
+            RF output = 0.;
+            typename Traits::GridTraits::Vector localFlux;
+
+            Dune::GeometryType type = elem.geometry().type();
+            const auto& rule = Dune::QuadratureRules
+              <typename Traits::GridTraits::DomainField, Traits::GridTraits::dim>::rule(type, 1);
+
+            // loop over quadrature points 
+            for(const auto& point : rule) 
+            {
+              const auto& x = point.position();
+              (*forwardStorage).flux(time,elem,x,localFlux);
+              RF norm = 0.;
+              for (const auto& entry : localFlux)
+                norm += entry*entry;
+              norm = std::sqrt(norm);
+
+              output = std::max(output,norm);
+            }
+
+            return output;
+          }
+
+        /**
+         * @brief Adjoint source term based on measurements
+         */
+        template<typename Element, typename Domain, typename Time>
+          RF adjointSource(const Element& elem, const Domain& x, const Time& t) const
+          {
+            // only needed for adjoint
+            return 0.;
+          }
+
+        /**
+         * @brief Adjoint flux term based on measurements
+         */
+        template<typename Intersection, typename IDomain, typename Time>
+          RF adjointFlux(const Intersection& is, const IDomain& x, const Time& t) const
+          {
+            // only needed for adjoint
+            return 0.;
+          }
+
+        /**
+         * @brief Make ModelParameters of different model available //jonas
+         */
+        void registerModel(
+            const std::string& name,
+            const std::shared_ptr<ModelParameters<Traits,ModelTypes::Transport> >& otherParams
+            )
+        {
+       	  transportParams = otherParams;  
+        }
+
+      };
+
+    /**
+     * @brief Equation traits class for forward / adjoint geoelectrics equation
+     */
+    template<typename Traits, typename DirectionType>
+      class EquationTraits<Traits, ModelTypes::Geoelectrics, DirectionType>
+      {
+        public:
+
+          using GridTraits = typename Traits::GridTraits;
+
+          using GridView    = typename GridTraits::GridView;
+          using DomainField = typename GridTraits::DomainField;
+          using RangeField  = typename GridTraits::RangeField;
+
+          enum {dim = GridTraits::dim};
+
+          using FEM = Dune::PDELab::P0LocalFiniteElementMap<DomainField,RangeField,dim>;
+          using VBE = Dune::PDELab::istl::VectorBackend<Dune::PDELab::istl::Blocking::fixed,1>;
+          using CON = Dune::PDELab::P0ParallelConstraints;
+
+          using GridFunctionSpace = Dune::PDELab::GridFunctionSpace<GridView,FEM,CON,VBE>;
+          using GridVector        = typename Dune::PDELab::Backend::Vector<GridFunctionSpace,RangeField>;
+
+          using DiscretizationType = Discretization::CellCenteredFiniteVolume;
+
+          // use linear solver in stationary case,
+          // implicit linear solver for transient case
+          template<typename... T>
+            using StationarySolver = StationaryLinearSolver<T...>;
+          template<typename... T>
+            using TransientSolver  = ImplicitLinearSolver<T...>;
+
+          // use implicit euler for timestepping
+          // alternative: Alexander2
+          using OneStepScheme = Dune::PDELab::ImplicitEulerParameter<RangeField>;
+
+          // use RT0 flux reconstruction
+          // alternatives: BDM1 and RT1
+          template<typename... T>
+            using FluxReconstruction = RT0Reconstruction<T...>;
+
+          // store complete space-time solution
+          // alternative: only store last two steps
+          template<typename... T>
+            using StorageContainer = FullContainer<T...>;
+
+          // use next timestep when interpolating stored solution
+          // alternatives: PreviousTimestep and LinearInterpolation
+          template<typename... T>
+            using TemporalInterpolation = NextTimestep<T...>;
+
+        private:
+
+          const FEM fem;
+          GridFunctionSpace space;
+
+        public:
+
+          EquationTraits(const Traits& traits)
+            : fem(Dune::GeometryType(Dune::GeometryType::cube,dim)),
+            space(traits.grid().levelGridView(0),fem)
+        {
+          space.ordering();
+        }
+
+          const GridFunctionSpace& gfs() const
+          {
+            return space;
+          }
+
+      };
+
+    /**
+     * @brief Class representing initial condition for geoelectrics
+     */
+    template<typename Traits>
+      class InitialValue<Traits, ModelTypes::Geoelectrics>
+      : public InitialValueBase<Traits,InitialValue<Traits,ModelTypes::Geoelectrics> >
+      {
+        public:
+
+          template<typename GV>
+            InitialValue(
+                const Traits& traits,
+                const GV& gv,
+                const ModelParameters<Traits,ModelTypes::Geoelectrics>& parameters
+                )
+            : InitialValueBase<Traits,InitialValue<Traits,ModelTypes::Geoelectrics> >(gv)
+            {}
+
+          template<typename Domain, typename Value>
+            void evaluateGlobal(const Domain& x, Value& y) const
+            {
+              // homogeneous initial conditions
+              y = 0.;
+            }
+      };
+
+    template<typename Traits, typename ModelType, typename DirectionType>
+      class SourceTerm;
+
+    /**
+     * @brief Source term of geoelectrics equation
+     */
+    template<typename Traits>
+      class SourceTerm<Traits, ModelTypes::Geoelectrics, Direction::Forward>
+      {
+        const ModelParameters<Traits,ModelTypes::Geoelectrics>& parameters;
+        public:
+          //SourceTerm(const ModelParameters<Traits,ModelTypes::Geoelectrics>& parameters)
+          //{}
+          
+          SourceTerm(const ModelParameters<Traits,ModelTypes::Geoelectrics>& parameters_)
+          : parameters(parameters_)
+          {}
+          
+          template<typename Element, typename Domain, typename Time>
+            auto q (const Element& elem, const Domain& x, const Time& t) const //jonas
+            { 
+              // define a rangefield
+              using RF     = typename Traits::GridTraits::RangeField;
+              
+              // initialize electric current
+              RF I = 0.0;
+              
+              int source_index = parameters.electrodecell();          // this is the index of the cell containing the electrode
+              int current_index = parameters.index_set().index(elem); // this is the index of the cell we are looking at right now
+              
+              // check if the current cell contains the electrode, if so -> give it a source term
+              if (source_index == current_index)
+              {
+                //std::cout << "current cell midpoint: " << elem.geometry().center();
+                //auto temp_vec = parameters.electrodecell_midpoint();
+                //std::cout << " | electrode coordinates: " << temp_vec[0] << " " << temp_vec[1] << " " << temp_vec[2] << std::endl;
+                I = 1.0;
+              }
+              return I;
+            }
+      };
+
+    /**
+     * @brief Source term of adjoint geoelectrics equation
+     */
+    template<typename Traits>
+      class SourceTerm<Traits, ModelTypes::Geoelectrics, Direction::Adjoint>
+      {
+        const ModelParameters<Traits,ModelTypes::Geoelectrics>& parameters;
+
+        public:
+
+        SourceTerm(const ModelParameters<Traits,ModelTypes::Geoelectrics>& parameters_)
+          : parameters(parameters_)
+        {}
+
+        template<typename Element, typename Domain, typename Time>
+          auto q (const Element& elem, const Domain& x, const Time& t) const
+          {
+            // adjoint source depends on parameters / measurements
+            return parameters.adjointSource(elem,x,t);
+          }
+      };
+
+    /**
+     * @brief Define geoelectrics equation as a differential equation
+     */
+    template<typename Traits, typename DomainType, typename DirectionType>
+      class Equation<Traits,ModelTypes::Geoelectrics,DomainType,DirectionType>
+      : public DifferentialEquation<Traits,ModelTypes::Geoelectrics,DomainType,DirectionType>
+      {
+        using DifferentialEquation<Traits,ModelTypes::Geoelectrics,DomainType,DirectionType>::DifferentialEquation;
+      };
+
+    /**
+     * @brief Spatial local operator of the geoelectrics equation (CCFV version)
+     */
+    template<typename Traits, typename DirectionType>
+      class SpatialOperator<Traits, ModelTypes::Geoelectrics, Discretization::CellCenteredFiniteVolume, DirectionType>
+      : public Dune::PDELab::NumericalJacobianSkeleton
+      <SpatialOperator<Traits, ModelTypes::Geoelectrics, Discretization::CellCenteredFiniteVolume, DirectionType> >,
+      public Dune::PDELab::NumericalJacobianBoundary
+        <SpatialOperator<Traits, ModelTypes::Geoelectrics, Discretization::CellCenteredFiniteVolume, DirectionType> >,
+      public Dune::PDELab::FullSkeletonPattern, 
+      public Dune::PDELab::FullVolumePattern,
+      public Dune::PDELab::LocalOperatorDefaultFlags,
+      public Dune::PDELab::InstationaryLocalOperatorDefaultMethods<typename Traits::GridTraits::RangeField>
+      {
+        using GridTraits = typename Traits::GridTraits;
+
+        enum {dim = GridTraits::dim};
+
+        using RF      = typename GridTraits::RangeField;
+        using DF      = typename GridTraits::DomainField;
+        using Domain  = typename GridTraits::Domain;
+        using IDomain = typename GridTraits::IDomain;
+
+        public:
+
+        // pattern assembly flags
+        enum {doPatternVolume   = true};
+        enum {doPatternSkeleton = true};
+
+        // residual assembly flags
+        enum {doAlphaSkeleton  = true};
+        enum {doAlphaBoundary  = true};
+        enum {doLambdaVolume   = true};
+        enum {doLambdaSkeleton = DirectionType::isAdjoint()};
+        enum {doLambdaBoundary = true};
+
+        private:
+
+        const ModelParameters<Traits,ModelTypes::Geoelectrics>&              parameters;
+        const Boundary       <Traits,ModelTypes::Geoelectrics,DirectionType> boundary;
+        const SourceTerm     <Traits,ModelTypes::Geoelectrics,DirectionType> sourceTerm;
+
+        RF time;
+
+        public:
+
+        /**
+         * @brief Constructor
+         */
+        SpatialOperator(
+            const Traits& traits,
+            const ModelParameters<Traits,ModelTypes::Geoelectrics>& parameters_
+            )
+          : parameters(parameters_), boundary(traits,parameters.name()), sourceTerm(parameters)
+        {}
+
+        /**
+         * @brief Skeleton integral depending on test and ansatz functions
+         */
+        // each face is only visited ONCE!
+        template<typename IG, typename LFSU, typename X, typename LFSV, typename R>
+          void alpha_skeleton (const IG& ig, 
+              const LFSU& lfsu_s, const X& x_s, const LFSV& lfsv_s,
+              const LFSU& lfsu_n, const X& x_n, const LFSV& lfsv_n, 
+              R& r_s, R& r_n) const
+          {
+            const RF normalFlux = skeletonNormalFlux(ig.intersection(),x_s(lfsu_s,0),x_n(lfsu_n,0),time);
+            const RF faceVolume = ig.geometry().volume();
+
+            r_s.accumulate(lfsv_s,0,   normalFlux * faceVolume);
+            r_n.accumulate(lfsv_n,0, - normalFlux * faceVolume);
+          }
+
+        /**
+         * @brief Skeleton integral depending on test and ansatz functions
+         */
+        template<typename IG, typename LFSU, typename X, typename LFSV, typename R>
+          void alpha_boundary (const IG& ig, 
+              const LFSU& lfsu_s, const X& x_s, const LFSV& lfsv_s,
+              R& r_s) const
+          {
+            const IDomain& faceCenterLocal = referenceElement(ig.geometry()).position(0,0);
+
+            // evaluate boundary condition type
+            Dune::Modelling::BoundaryCondition::Type bc = boundary.bc(ig.intersection(),faceCenterLocal,time);
+            if (!Dune::Modelling::BoundaryCondition::isDirichlet(bc))
+              return;
+
+            // Dirichlet boundary conditions
+            const RF normalFlux = dirichletNormalFlux(ig.intersection(),x_s(lfsu_s,0),time);
+            const RF faceVolume = ig.geometry().volume();
+
+            r_s.accumulate(lfsv_s,0, normalFlux * faceVolume);
+          }
+
+        /**
+         * @brief Volume integral depending only on test functions (source term)
+         */
+        template<typename EG, typename LFSV, typename R>
+          void lambda_volume (const EG& eg, const LFSV& lfsv, R& r) const
+          {
+            const Domain& cellCenterLocal = referenceElement(eg.geometry()).position(0,0);
+            r.accumulate(lfsv,0, - sourceTerm.q(eg.entity(),cellCenterLocal,time));
+
+            if (DirectionType::isAdjoint())
+            {
+              RF q = 0.;
+
+              Dune::GeometryType geometrytype = eg.geometry().type();
+              /// @todo order
+              const Dune::QuadratureRule<DF, dim>& rule = Dune::QuadratureRules<DF, dim>::rule(geometrytype, 2);
+
+              // loop over quadrature points 
+              for(const auto& point : rule) 
+              {
+                const Domain& x = point.position();
+                const RF factor = point.weight() * eg.geometry().integrationElement(x);
+
+                q += sourceTerm.q(eg.entity(),x,time) * factor;
+              }
+
+              r.accumulate(lfsv,0, -q);
+            }
+          }
+
+        /**
+         * @brief Skeleton integral independent of ansatz functions
+         */
+        // each face is only visited ONCE!
+        template<typename IG, typename LFSV, typename R>
+          void lambda_skeleton (const IG& ig, const LFSV& lfsv_s, const LFSV& lfsv_n, R& r_s, R& r_n) const
+          {
+            RF q = 0.;
+
+            Dune::GeometryType geometrytype = ig.geometry().type();
+            /// @todo order
+            const Dune::QuadratureRule<DF, dim-1>& rule = Dune::QuadratureRules<DF, dim-1>::rule(geometrytype, 1);
+
+            // loop over quadrature points 
+            for(const auto& point : rule) 
+            {
+              const IDomain& x = point.position();
+              const RF factor  = point.weight() * ig.geometry().integrationElement(x);
+
+              q += parameters.adjointFlux(ig.intersection(),x,time) * factor;
+            }
+
+            r_s.accumulate(lfsv_s,0, -q);
+            r_n.accumulate(lfsv_n,0,  q);
+          }
+
+        /**
+         * @brief Boundary integral independent of ansatz functions
+         */
+        template<typename IG, typename LFSV, typename R>
+          void lambda_boundary (const IG& ig, const LFSV& lfsv, R& r_s) const
+          {
+            const IDomain& faceCenterLocal = referenceElement(ig.geometry()).position(0,0);
+
+            // evaluate boundary condition type
+            Dune::Modelling::BoundaryCondition::Type bc = boundary.bc(ig.intersection(),faceCenterLocal,time);
+            if (!Dune::Modelling::BoundaryCondition::isNeumann(bc))
+              return;
+
+            // Neumann boundary conditions
+            const RF faceVolume = ig.geometry().volume();
+            const RF j = boundary.j(ig.intersection(),faceCenterLocal,time);
+
+            r_s.accumulate(lfsv,0, j * faceVolume);
+          }
+
+        /**
+         * @brief Set time for subsequent evaluation
+         */
+        void setTime (const RF t)
+        {
+          time = t;
+        }
+
+        /**
+         * @brief Flux across intersection based on DGF values
+         */
+        template<typename Intersection, typename IDomain, typename ScalarDGF, typename VectorDGF>
+          RF normalFlux(
+              const Intersection& is,
+              const IDomain& x,
+              const ScalarDGF& scalar,
+              const VectorDGF& localGrad,
+              RF time
+              ) const
+          {
+            if (is.neighbor())
+            {
+              const Domain& cellCenterInside  = referenceElement(is.inside() .geometry()).position(0,0);
+              const Domain& cellCenterOutside = referenceElement(is.outside().geometry()).position(0,0);
+
+              typename Traits::GridTraits::Scalar innerValue, outerValue;
+              (*scalar).evaluate(is.inside(), cellCenterInside,innerValue);
+              (*scalar).evaluate(is.outside(),cellCenterOutside,outerValue);
+
+              return skeletonNormalFlux(is,innerValue[0],outerValue[0],time);
+            }
+            else if (is.boundary())
+            {
+              const IDomain& faceCenterLocal = referenceElement(is.geometry()).position(0,0);
+
+              // evaluate boundary condition type
+              Dune::Modelling::BoundaryCondition::Type bc = boundary.bc(is,faceCenterLocal,time);
+
+              if (Dune::Modelling::BoundaryCondition::isDirichlet(bc))
+              {
+                const Domain& cellCenterInside = referenceElement(is.inside().geometry()).position(0,0);
+                typename Traits::GridTraits::Scalar innerValue;
+                (*scalar).evaluate(is.inside(), cellCenterInside,innerValue);
+                return dirichletNormalFlux(is,innerValue[0],time);
+              }
+              else if (Dune::Modelling::BoundaryCondition::isNeumann(bc))
+                return boundary.j(is,faceCenterLocal,time);
+              else
+                DUNE_THROW(Dune::Exception,"unknown boundary condition type");
+            }
+            else
+              return 0.;
+          }
+
+        /**
+         * @brief Derivative of flux across intersection based on DGF values
+         */
+        template<typename Intersection, typename IDomain, typename ScalarDGF, typename VectorDGF>
+          RF normalFluxDeriv(
+              const Intersection& is,
+              const IDomain& x,
+              const ScalarDGF& scalar,
+              const VectorDGF& localGrad,
+              RF time
+              ) const
+          {
+            DUNE_THROW(Dune::NotImplemented,
+                "derivative of normal flux not implemented for geoelectrics flow equation");
+          }
+
+        /**
+         * @brief Derivative across intersection based on DGF values
+         */
+        template<typename Intersection, typename IDomain, typename ScalarDGF, typename VectorDGF>
+          RF normalDerivative(
+              const Intersection& is,
+              const IDomain& x,
+              const ScalarDGF& scalar,
+              const VectorDGF& localGrad,
+              RF time
+              ) const
+          {
+            if (is.neighbor())
+            {
+              const Domain& cellCenterInside  = referenceElement(is.inside() .geometry()).position(0,0);
+              const Domain& cellCenterOutside = referenceElement(is.outside().geometry()).position(0,0);
+
+              typename Traits::GridTraits::Scalar innerValue, outerValue;
+              (*scalar).evaluate(is.inside(), cellCenterInside,innerValue);
+              (*scalar).evaluate(is.outside(),cellCenterOutside,outerValue);
+
+              return skeletonNormalDerivative(is,innerValue[0],outerValue[0]);
+            }
+            else if (is.boundary())
+            {
+              const IDomain& faceCenterLocal = referenceElement(is.geometry()).position(0,0);
+
+              // evaluate boundary condition type
+              Dune::Modelling::BoundaryCondition::Type bc = boundary.bc(is,faceCenterLocal,time);
+
+              if (Dune::Modelling::BoundaryCondition::isDirichlet(bc))
+              {
+                const Domain& cellCenterInside = referenceElement(is.inside().geometry()).position(0,0);
+                typename Traits::GridTraits::Scalar innerValue;
+                (*scalar).evaluate(is.inside(), cellCenterInside,innerValue);
+                return dirichletNormalDerivative(is,innerValue[0],time);
+              }
+              else if (Dune::Modelling::BoundaryCondition::isNeumann(bc))
+              {
+                const Domain& cellCenterInside = referenceElement(is.inside().geometry()).position(0,0);
+                const RF boundaryFlux = boundary.j(is,faceCenterLocal,time);
+                const RF K_inside = parameters.cond(is.inside(),cellCenterInside,time);
+                // revert flux computation to obtain gradient on boundary
+                return - boundaryFlux / K_inside;
+              }
+              else
+                DUNE_THROW(Dune::Exception,"unknown boundary condition type");
+            }
+            else
+              return 0.;
+          }
+
+        private:
+
+        /**
+         * @brief Flux in normal direction across interface
+         */
+        template<typename Intersection>
+          RF skeletonNormalFlux(const Intersection& is, RF innerValue, RF outerValue, RF time) const
+          {
+            // geometry information
+            const Domain& cellCenterInside  = referenceElement(is.inside() .geometry()).position(0,0);
+            const Domain& cellCenterOutside = referenceElement(is.outside().geometry()).position(0,0);
+
+            // conductivity
+            const RF K_inside  = parameters.cond(is.inside(), cellCenterInside, time);
+            const RF K_outside = parameters.cond(is.outside(),cellCenterOutside,time);
+            const RF K = havg(K_inside,K_outside);
+
+            return - K * skeletonNormalDerivative(is,innerValue,outerValue);
+          }
+
+        /**
+         * @brief Derivative of solution in normal direction across interface
+         */
+        template<typename Intersection>
+          RF skeletonNormalDerivative(const Intersection& is, RF innerValue, RF outerValue) const
+          {
+            // geometry information
+            const RF faceVolume    = is          .geometry().volume();
+            const RF insideVolume  = is.inside() .geometry().volume();
+            const RF outsideVolume = is.outside().geometry().volume();
+
+            const RF distance = havg(insideVolume,outsideVolume)/faceVolume;
+
+            // approximation of gradient
+            const RF w = (outerValue - innerValue)/distance;
+
+            return w;
+          }
+
+        /**
+         * @brief Flux in normal direction on Dirichlet boundary
+         */
+        template<typename Intersection>
+          RF dirichletNormalFlux(const Intersection& is, RF innerValue, RF time) const
+          {
+            // geometry information
+            const Domain&  cellCenterInside = referenceElement(is.inside().geometry()).position(0,0);
+
+            // conductivity
+            const RF K_inside = parameters.cond(is.inside(),cellCenterInside,time);
+
+            return - K_inside * dirichletNormalDerivative(is,innerValue,time);
+          }
+
+        /**
+         * @brief Derivative of solution in normal direction on Dirichlet boundary
+         */
+        template<typename Intersection>
+          RF dirichletNormalDerivative(const Intersection& is, RF innerValue, RF time) const
+          {
+            // geometry information
+            const IDomain& faceCenterLocal  = referenceElement(is.geometry()).position(0,0);
+
+            const RF faceVolume    = is          .geometry().volume();
+            const RF insideVolume  = is.inside() .geometry().volume();
+
+            const RF distance = insideVolume/faceVolume;
+
+            // approximation of gradient
+            const RF g = boundary.g(is,faceCenterLocal,time);
+            const RF w = (g - innerValue)/(distance/2.);
+
+            return w;
+          }
+
+        /**
+         * @brief Harmonic average
+         */
+        template<typename T>
+          T havg (T a, T b) const
+          {
+            const T eps = 1e-30;
+            return 2./(1./(a + eps) + 1./(b + eps));
+          }
+
+      };
+
+    /**
+     * @brief Temporal local operator of the geoelectrics equation (CCFV version)
+     */
+    /*jonas, stationary! no temporal operator needed
+    template<typename Traits, typename DirectionType>
+      class TemporalOperator<Traits, ModelTypes::Geoelectrics, Discretization::CellCenteredFiniteVolume, DirectionType>
+      : public Dune::PDELab::NumericalJacobianVolume
+      <TemporalOperator<Traits, ModelTypes::Geoelectrics, Discretization::CellCenteredFiniteVolume, DirectionType> >,
+      public Dune::PDELab::FullVolumePattern,
+      public Dune::PDELab::LocalOperatorDefaultFlags,
+      public Dune::PDELab::InstationaryLocalOperatorDefaultMethods<typename Traits::GridTraits::RangeField>
+      {
+        using GridTraits = typename Traits::GridTraits;
+
+        using RF     = typename GridTraits::RangeField;
+        using DF     = typename GridTraits::DomainField;
+        using Domain = typename GridTraits::Domain;
+
+        const ModelParameters<Traits,ModelTypes::Geoelectrics>& parameters;
+        
+        RF time;    //jonas        
+
+        public:
+
+        // pattern assembly flags
+        enum {doPatternVolume = true};
+
+        // residual assembly flags
+        enum {doAlphaVolume = true};
+
+        **
+         * @brief Constructor
+         *
+        TemporalOperator(
+            const Traits& traits,
+            const ModelParameters<Traits,ModelTypes::Geoelectrics>& parameters_
+            )
+          : parameters(parameters_)
+        {}
+
+        **
+         * @brief Volume integral depending on test and ansatz functions
+         *
+        template<typename EG, typename LFSU, typename X, typename LFSV, typename R>
+          void alpha_volume (const EG& eg, const LFSU& lfsu, const X& x, const LFSV& lfsv, R& r) const
+          {
+            const RF cell_volume = eg.geometry().volume();
+            const Domain& cellCenterLocal = referenceElement(eg.geometry()).position(0,0);
+            
+            //test if access to concentrations is possible; jonas
+            //const RF conc_local = parameters.conc(eg.entity(),cellCenterLocal,time); // jonas
+            //std::cout << "concentration was received. value: " << conc_local << "; time in model was: " << time << std::endl; //jonas
+  
+            if (DirectionType::isAdjoint())
+              r.accumulate(lfsv,0, - parameters.stor(eg.entity(),cellCenterLocal,time) * x(lfsu,0) * cell_volume);
+            else
+              r.accumulate(lfsv,0,   parameters.stor(eg.entity(),cellCenterLocal,time) * x(lfsu,0) * cell_volume);
+          }
+
+      };
+    */
+    
+    /**
+     * @brief Class providing sensitivity computation for geoelectrics flow
+     */
+    template<typename Traits>
+      class SensitivityComp<Traits,ModelTypes::Geoelectrics>
+      {
+        public:
+
+          SensitivityComp(
+              const Traits& traits,
+              const ModelParameters<Traits,ModelTypes::Geoelectrics>& parameters
+              )
+          {}
+
+          void initialize(const std::shared_ptr<typename Traits::SensitivityList>& sensitivityList)
+          {
+          }
+
+          template<typename Time>
+            void extract(const Time& first, const Time& last)
+            {
+              std::cout << "(would extract sensitivity from " << first
+                << " to " << last << ")" << std::endl;
+            }
+
+      };
+
+  }
+}
+
+#endif // DUNE_MODELLING_GEOELECTRICS_HH

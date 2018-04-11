@@ -1,0 +1,13 @@
+[ randomField ]
+transform  = logNormal
+
+[ stochastic ]
+corrLength = 0.1
+covariance = exponential
+variance   = 3
+#variance   = 0
+
+[ mean ]
+mean       = -4
+#mean       = 0
+variance   = 0

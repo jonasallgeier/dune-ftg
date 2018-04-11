@@ -1,0 +1,3 @@
+field can be generated from fieldgenerator using the following syntax:
+
+\path\to\fieldgenerator .\modelling.ini -output.dune \path\to\output

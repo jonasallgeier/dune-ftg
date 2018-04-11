@@ -1,0 +1,10 @@
+################################
+# Dune module information file #
+################################
+
+#Name of the module
+Module: dune-ftg
+Version: 1.0
+Maintainer: jonas-timon.allgeier@student.uni-tuebingen.de
+#depending on
+Depends: dune-common dune-modelling dune-randomfield

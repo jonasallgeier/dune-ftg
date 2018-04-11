@@ -1,0 +1,10 @@
+[ grid ]
+cells = "50 35 10"
+extensions = "100 70 20"
+[ mean ]
+mean = "0.4"
+variance = "0"
+[ stochastic ]
+corrLength = "0.05"
+covariance = "exponential"
+variance = "0"

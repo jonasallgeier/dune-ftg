@@ -1,0 +1,22 @@
+<?xml version="1.0" ?>
+<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>
+<Xdmf Version="2.0">
+ <Domain>
+  <Grid Name="StructuredGrid" GridType="Uniform">
+   <Topology TopologyType="3DRectMesh" NumberOfElements="10 35 50 "/>
+   <Geometry GeometryType="origin_dxdydz">
+    <DataItem Dimensions="3" NumberType="Float" Precision="4" Format="XML">
+     0. 0. 0.
+    </DataItem>
+    <DataItem Dimensions="3" NumberType="Float" Precision="4" Format="XML">
+     2 2 2 
+    </DataItem>
+   </Geometry>
+   <Attribute Name="/home/jonas/Schreibtisch/HDF5_stuff/.conductivity" AttributeType="Scalar" Center="Cell">
+    <DataItem Dimensions="10 35 50 " NumberType="Float" Precision="4" Format="HDF">
+     /home/jonas/Schreibtisch/HDF5_stuff/.conductivity.stoch.h5:/stochastic
+    </DataItem>
+   </Attribute>
+  </Grid>
+ </Domain>
+</Xdmf>
