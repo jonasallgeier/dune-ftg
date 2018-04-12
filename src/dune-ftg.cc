@@ -49,43 +49,14 @@ void transientTransport(int argc, char** argv)
   forwardModelList.add<GroundwaterModel>("groundwater");
   forwardModelList.add<TransportModel,GroundwaterModel>("transport",std::list<std::string>{"groundwater"});
   
-  // electrode position was already obtained; now, the coordinates of the electrodes are assigned to the cells they are located in
-  const typename ModelTraits::GridTraits::Grid::LeafGridView& mygridview = modelTraits.grid().leafGridView(); // get leaf grid view
-  auto& index_set = mygridview.indexSet();                              //get index set
-  typedef Dune::HierarchicSearch< ModelTraits::GridTraits::Grid, decltype(index_set) > HierarchicSearch;      // define how a hierarchic search object  looks like
-  HierarchicSearch hsearch(modelTraits.grid(), index_set);              // define a hierarchic search object
-  
-  typename ModelTraits::GridTraits::Vector  electrode_coordinates;      // temporary vector containing coordinates of current electrode
-  int no_electrodes = modelTraits.electrodeconfiguration.no_electrodes; // total number of electrodes
-  auto electrode_cells = std::vector<int>(no_electrodes);               // define a vector for electrode cell indices, is later given to modelTraits
-  
-  for (int i = 0; i < no_electrodes; i++) // go through all electrodes and assign them  
-  { 
-    electrode_coordinates[0] = modelTraits.electrodeconfiguration.x_elec[i];  // get current coordinates
-    electrode_coordinates[1] = modelTraits.electrodeconfiguration.y_elec[i];  // get current coordinates
-    electrode_coordinates[2] = modelTraits.electrodeconfiguration.z_elec[i];  // get current coordinates
-    // throw exception, when a single electrode is outside of domain    
-    try
-    {
-      const auto test_answer = hsearch.findEntity(electrode_coordinates);     // find out which cell contains the electrode coordinates
-      electrode_cells[i] = index_set.index(test_answer);                      // assign the electrode coordinate  
-      //std::cout << "electrode " << i+1 << " of " << no_electrodes << " electrodes: "<<  electrode_coordinates << " -> " << electrode_cells[i] << std::endl; // get the cell and give output  
-    }
-    catch (Dune::Exception &e)
-    {
-      //std::cerr << "There is an electrode outside of the grid. This is not allowed!" << std::endl;
-      //throw;
-      //if (mygridview.comm().rank()==0)
-      //{ 
-      //std::cerr << "electrode could not be located!" << std::endl;
-      //}
-    }
-  }
-  modelTraits.set_electrodecells(electrode_cells); // give electrode cell indices to modelTraits
+  setelectrodes<ModelTraits>(&modelTraits);
+  setwells<ModelTraits>(&modelTraits);
 
   //Jonas; add many geoelectrics models
   std::stringstream temp_ss;
   std::string temp_name;
+  int no_electrodes = modelTraits.electrodeconfiguration.no_electrodes; // total number of electrodes
+  
   //generate N models for N electrodes
   for (int i = 0; i < no_electrodes; i++) //jonas
   {
@@ -95,14 +66,7 @@ void transientTransport(int argc, char** argv)
     temp_ss << "geoelectrics";
     temp_ss << i;
     temp_name = temp_ss.str();
-    
-    //copy the boundary condition file for each model, as all geoelectrics models should have the same boundary conditions
-    //std::ifstream src("./boundary.geoelectrics",std::ios::in);
-    //std::ofstream dst("./boundary."+temp_name,std::ios::out);
-    //dst << src.rdbuf();
-    //src.close();
-    //dst.close();
-    
+
     //create a new geoelectrics model
     forwardModelList.add<GeoelectricsModel,TransportModel>(temp_name,std::list<std::string>{"transport"});
   }

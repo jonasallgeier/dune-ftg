@@ -110,6 +110,8 @@ class ModelTraits
 {
   private:
   std::vector<int> electrodecells;
+  std::vector<int> wellcells;
+  std::vector<double> well_qs;
   public:
     // traits relating to geometry and underlying types
     struct GridTraits
@@ -151,8 +153,8 @@ class ModelTraits
         template<typename Storage>
         void extract(const Storage& storage, const RF& firstTime, const RF& lastTime)
         {
-          //std::cout << "(would extract measurements " << firstTime << " to " << lastTime << ")" << std::endl;
-          std::cout << "this is a test, to see if solution printing without VTK works" << std::endl;
+          std::cout << "(would extract measurements " << firstTime << " to " << lastTime << ")" << std::endl;
+          //std::cout << "this is a test, to see if solution printing without VTK works" << std::endl;
           //(*storage).value();
         }
       };
@@ -228,7 +230,26 @@ class ModelTraits
     void set_electrodecells(std::vector<int> in_electrodecells)
     {
       electrodecells = in_electrodecells;
-    }    
+    }
+
+    // provide the vector of grid indices that contain wells
+    std::vector<int> read_wellcells() const
+    {
+      return wellcells;
+    }
+
+    // provide the vector of pumping rates
+    std::vector<double> read_wellqs() const
+    {
+      return well_qs;
+    }
+
+    // mechanism to define the vector of grid indices that contain wells
+    void set_wellcells(std::vector<int> in_wellcells, std::vector<double> in_wellqs)
+    {
+      wellcells = in_wellcells;
+      well_qs = in_wellqs;
+    }  
 
     // define electrode configuration; it is read in from a file by the constructor of this struct
     struct ElectrodeConfiguration
@@ -279,7 +300,7 @@ class ModelTraits
             file_econf.close();
             if (myrank == 0)
             { 
-            std::cout << " done." << std::endl;
+            std::cout << " done. Found " << z_elec.size() << " electrodes." << std::endl;
             }
           }
           else
@@ -290,7 +311,69 @@ class ModelTraits
     };
     
     //call constructor to read in electrode configuration from file specified in .ini; data is stored in a struct object
-    ElectrodeConfiguration electrodeconfiguration {duneConfig.get<std::string>("configfile.name"),rank()};    
+    ElectrodeConfiguration electrodeconfiguration {duneConfig.get<std::string>("configfiles.electrodes"),rank()};
+
+    // define electrode configuration; it is read in from a file by the constructor of this struct
+    struct WellConfiguration
+    {
+        int no_wells;          // number of wells
+        std::vector<double> x_well; // vector of x coordinates
+        std::vector<double> y_well; // vector of y coordinates
+        std::vector<double> z1_well; // vector of z1 coordinates
+        std::vector<double> z2_well; // vector of z2 coordinates
+        std::vector<double> q_well; // vector of pumping rates 
+
+        // constructor -> reads in the data from file
+        WellConfiguration (std::string wellfilename, int myrank) 
+        {
+	      std::ifstream file_wconf; // open the file
+          file_wconf.open(wellfilename);
+          if (myrank == 0)
+          {          
+          std::cout << "Attempting to read well configuration file...";
+          }          
+          if (file_wconf.is_open())
+          {           
+            file_wconf >> no_wells;  //first line equals number of electrodes
+   
+            //declare temporary storage variables
+            double tmp_x;
+            double tmp_y;
+            double tmp_z1;
+            double tmp_z2;
+            double tmp_q;
+        
+            //read data in lines {#,x,y,z,s} from file via temp to vector 
+            for (int i = 1; i < no_wells+1; i++) 
+            {
+              file_wconf >> tmp_x;
+              x_well.push_back(tmp_x);
+              file_wconf >> tmp_y;
+              y_well.push_back(tmp_y);
+              file_wconf >> tmp_z1;
+              z1_well.push_back(tmp_z1);
+              file_wconf >> tmp_z2;
+              z2_well.push_back(tmp_z2);
+              file_wconf >> tmp_q;
+              q_well.push_back(tmp_q);
+            }
+            
+            //close the file and give console output
+            file_wconf.close();
+            if (myrank == 0)
+            { 
+            std::cout << " done. Found " << q_well.size() << " wells." << std::endl;
+            }
+          }
+          else
+          {
+            DUNE_THROW(Dune::Exception,"Unable to read well configuration file. Please check file name. ");
+          }
+        };
+    };
+    
+    //call constructor to read in electrode configuration from file specified in .ini; data is stored in a struct object
+    WellConfiguration wellconfiguration {duneConfig.get<std::string>("configfiles.wells"),rank()};    
 };
 
 

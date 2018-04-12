@@ -106,6 +106,7 @@ namespace Dune {
         void setMeasurementList(const std::shared_ptr<const MeasurementList>& list)
         {
           // measurements missing
+          //std::cout << "this is the setMeasurementList method of the geoelectrics model" << std::endl;
         }
 
         /**

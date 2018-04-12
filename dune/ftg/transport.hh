@@ -78,7 +78,7 @@ namespace Dune {
          */
         void setMeasurementList(const std::shared_ptr<const typename Traits::MeasurementList>& list)
         {
-          // measurements missing
+          //std::cout << "this is the setMeasurementList method of the transport model" << std::endl;
         }
 
         /**
