@@ -112,6 +112,8 @@ class ModelTraits
   std::vector<int> electrodecells;
   std::vector<int> wellcells;
   std::vector<double> well_qs;
+  std::vector<int> well_in_cells;
+
   public:
     // traits relating to geometry and underlying types
     struct GridTraits
@@ -244,11 +246,18 @@ class ModelTraits
       return well_qs;
     }
 
+    // provide the vector of pumping rates
+    std::vector<int> read_well_in_cells() const
+    {
+      return well_in_cells;
+    }
+
     // mechanism to define the vector of grid indices that contain wells
-    void set_wellcells(std::vector<int> in_wellcells, std::vector<double> in_wellqs)
+    void set_wellcells(std::vector<int> in_wellcells, std::vector<double> in_wellqs, std::vector<int> in_injection_cells)
     {
       wellcells = in_wellcells;
       well_qs = in_wellqs;
+      well_in_cells = in_injection_cells;
     }  
 
     // define electrode configuration; it is read in from a file by the constructor of this struct
@@ -321,7 +330,8 @@ class ModelTraits
         std::vector<double> y_well; // vector of y coordinates
         std::vector<double> z1_well; // vector of z1 coordinates
         std::vector<double> z2_well; // vector of z2 coordinates
-        std::vector<double> q_well; // vector of pumping rates 
+        std::vector<double> q_well; // vector of pumping rates
+        std::vector<bool> injection_well; // vector of bools indicating whether this well participates the tracer injection 
 
         // constructor -> reads in the data from file
         WellConfiguration (std::string wellfilename, int myrank) 
@@ -342,6 +352,7 @@ class ModelTraits
             double tmp_z1;
             double tmp_z2;
             double tmp_q;
+            bool tmp_in;
         
             //read data in lines {#,x,y,z,s} from file via temp to vector 
             for (int i = 1; i < no_wells+1; i++) 
@@ -356,6 +367,8 @@ class ModelTraits
               z2_well.push_back(tmp_z2);
               file_wconf >> tmp_q;
               q_well.push_back(tmp_q);
+              file_wconf >> tmp_in;
+              injection_well.push_back(tmp_in);
             }
             
             //close the file and give console output

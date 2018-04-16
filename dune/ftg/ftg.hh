@@ -1,3 +1,5 @@
+// -*- tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+// vi: set et ts=4 sw=2 sts=2:
 #ifndef DUNE_FTG_HH
 #define DUNE_FTG_HH
 using namespace Dune::Modelling;
@@ -52,15 +54,18 @@ void setwells(auto modelTraits)
   auto& index_set = mygridview.indexSet();                              //get index set
   
   typename ModelTraits::GridTraits::Vector  well_coordinates;       // temporary vector containing coordinates of current well
-  int no_wells = modelTraits->wellconfiguration.no_wells;            // total number of wells
+  int no_wells = modelTraits->wellconfiguration.no_wells;           // total number of wells
   std::vector<int> well_cells;         // define a vector for well cell indices, is later given to modelTraits
   std::vector<double> well_qs;
-  std::vector<int> well_identities;  
+  std::vector<int> well_identities;
+  std::vector<bool> well_injectionindicator; // 1 if cell contains a tracer injection; 0 else
+
   std::vector<double> well_x = modelTraits->wellconfiguration.x_well;  
   std::vector<double> well_y = modelTraits->wellconfiguration.y_well;
   std::vector<double> well_z1 = modelTraits->wellconfiguration.z1_well;
   std::vector<double> well_z2 = modelTraits->wellconfiguration.z2_well;
   std::vector<double> well_q = modelTraits->wellconfiguration.q_well;
+  std::vector<bool> well_in = modelTraits->wellconfiguration.injection_well;
   
   // go through all cells and determine the well contributions
   for (const auto & elem : elements (mygridview))
@@ -87,7 +92,8 @@ void setwells(auto modelTraits)
           well_cells.push_back(index_set.index(elem));
           well_qs.push_back(well_q[i]);
           well_identities.push_back(i);
-        }
+          well_injectionindicator.push_back(well_in[i]);
+         }
       }
     }
   }
@@ -105,19 +111,30 @@ void setwells(auto modelTraits)
   // sum all distributions in a cell up
   auto well_cells_new = well_cells;
   std::sort( well_cells_new.begin(), well_cells_new.end() );
-  well_cells_new.erase( std::unique( well_cells_new.begin(), well_cells_new.end() ), well_cells_new.end() );
+  well_cells_new.erase( std::unique( well_cells_new.begin(), well_cells_new.end() ), well_cells_new.end() ); //get unique well cells
   
   std::vector<double> well_qs_new = std::vector<double>(well_cells_new.size());
+  std::vector<int> well_injectioncells;
   
   for (unsigned int i = 0; i!=well_cells_new.size();i++)
   {
     well_qs_new[i]=0;
     for(unsigned int j = 0; j != well_qs.size(); j++) 
     {
-      if (well_cells[j]==well_cells_new[i]) {well_qs_new[i] += well_qs[j];}
+      if (well_cells[j]==well_cells_new[i]) 
+      {
+        well_qs_new[i] += well_qs[j];
+        if (well_injectionindicator[j] == true) {well_injectioncells.push_back(well_cells_new[i]);}
+      }
     }
   }
-  modelTraits->set_wellcells(well_cells_new,well_qs_new); // give well cell indices to modelTraits
+  
+  // get unique injection well cells  
+  std::sort( well_injectioncells.begin(), well_injectioncells.end() );
+  well_injectioncells.erase( std::unique( well_injectioncells.begin(), well_injectioncells.end() ), well_injectioncells.end() ); //get unique well cells
+
+
+  modelTraits->set_wellcells(well_cells_new,well_qs_new,well_injectioncells); // give well cell indices to modelTraits
 
 }
 

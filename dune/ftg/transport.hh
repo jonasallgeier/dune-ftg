@@ -1,3 +1,5 @@
+// -*- tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+// vi: set et ts=4 sw=2 sts=2:
 #ifndef DUNE_MODELLING_TRANSPORT_HH
 #define DUNE_MODELLING_TRANSPORT_HH
 
@@ -189,6 +191,24 @@ namespace Dune {
           // only needed for adjoint?
         }
 
+        //auto myhsearch() const
+        //{
+        //  auto& index_set = traits.grid().leafGridView().indexSet();
+        //  typedef Dune::HierarchicSearch<typename Traits::GridTraits::Grid, decltype(index_set)> HierarchicSearch;      // define how a hierarchic search object  looks like
+        //  HierarchicSearch hsearch(traits.grid(), index_set);  
+        //  return hsearch;
+        //};
+        
+        //auto& myindex_set() const
+        //{
+        //  return traits.grid().leafGridView().indexSet();
+        //};
+        
+        std::vector<int> well_in_cells() const
+        {
+          return traits.read_well_in_cells();
+        };
+
       };
 
     /**
@@ -270,21 +290,76 @@ namespace Dune {
       class InitialValue<Traits, typename ModelTypes::Transport>
       : public InitialValueBase<Traits,InitialValue<Traits,ModelTypes::Transport> >
       {
+        const ModelParameters<Traits,ModelTypes::Transport>& parameters;
+        const Traits& traits;
+        typename Traits::GridTraits::Grid::LeafGridView lgv;
+        using RF = typename Traits::GridTraits::RangeField;
+
+        std::vector<double> x_min;
+        std::vector<double> x_max;
+        std::vector<double> y_min;
+        std::vector<double> y_max;
+        std::vector<double> z_min;
+        std::vector<double> z_max;
+        std::vector<double> volume;
+        double totalvolume = 0.;
+        RF tracermass;
+  
         public:
           template<typename GV>
             InitialValue(
-                const Traits& traits,
+                const Traits& traits_,
                 const GV& gv,
-                const ModelParameters<Traits,ModelTypes::Transport>& parameters
+                const ModelParameters<Traits,ModelTypes::Transport>& parameters_
                 )
-            : InitialValueBase<Traits,InitialValue<Traits,ModelTypes::Transport> >(gv)
-            {}
+            : InitialValueBase<Traits,InitialValue<Traits,ModelTypes::Transport> >(gv), parameters(parameters_), traits(traits_), lgv(traits.grid().leafGridView())
+            {
+              // as the evaluateGlobal function only receives global coordinates, we need to access all injection cells and get their global
+              // coordinate limits...
+              tracermass = traits.config().template get<RF>("tracer.mass");
+              auto &index_set = lgv.indexSet();
+              for (const auto & elem : elements (lgv))
+              {
+                int the_index = index_set.index(elem);
+                for (unsigned int i = 0; i!=parameters.well_in_cells().size();i++)
+                {
+                  if (the_index == parameters.well_in_cells()[i]) 
+                  {
+                    //std::cout << "the index is " << the_index << std::endl;
+                    x_min.push_back(elem.geometry().corner(0)[0]);
+                    x_max.push_back(elem.geometry().corner(1)[0]);
+                    y_min.push_back(elem.geometry().corner(0)[1]);
+                    y_max.push_back(elem.geometry().corner(2)[1]);
+                    z_min.push_back(elem.geometry().corner(0)[2]);
+                    z_max.push_back(elem.geometry().corner(4)[2]);
+                    volume.push_back(elem.geometry().volume());
+                    totalvolume += elem.geometry().volume();
+                  }
+                }
+              }
+            }
 
           template<typename Domain, typename Value>
             void evaluateGlobal(const Domain& x, Value& y) const
             {
-              // homogeneous initial conditions
-              y = 0.;
+              // initialize concentration
+              y[0] = 0.;
+              // if we have a tracer injection well, we have to set y<>0 according to the user specified tracer mass, porosity, etc.
+              for (unsigned int i = 0; i!=x_min.size();i++)
+              {
+                if (x[0] >= x_min[i] && x[0] < x_max[i]) 
+                {
+                  if (x[1] >= y_min[i] && x[1] < y_max[i]) 
+                  {
+                    if (x[2] >= z_min[i] && x[2] < z_max[i]) 
+                    {
+                      // this gives problems if run in parallel and set to nonzero... why?
+                      y[0] =tracermass/totalvolume/parameters.porosity(x);
+                      break;
+                    }
+                  }
+                }
+              }
             }
       };
 
