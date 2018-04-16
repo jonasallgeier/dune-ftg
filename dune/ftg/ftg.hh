@@ -79,7 +79,7 @@ void setwells(auto modelTraits)
       //double tmp_q = 0;
       if (well_x[i]>=x_min && well_x[i]<x_max && well_y[i]>=y_min && well_y[i]<y_max)
       {
-        if (well_z2[i] <= z_min || well_z1[i] > z_max)
+        if (well_z2[i] <= z_min || well_z1[i] >= z_max)
         {
           // well is outside of cell
         } else {

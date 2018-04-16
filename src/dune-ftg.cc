@@ -78,7 +78,7 @@ void transientTransport(int argc, char** argv)
   // define parameters (input) and measurements (output)
   using ParameterList   = ModelTraits::ParameterList;
   using MeasurementList = ModelTraits::MeasurementList;
-  std::shared_ptr<ParameterList>   parameterList  (new ParameterList("./fields/ftg_fields"));
+  std::shared_ptr<ParameterList>   parameterList  (new ParameterList("./fields/ftg"));
   //std::shared_ptr<ParameterList>   parameterList  (new ParameterList(config));
   std::shared_ptr<MeasurementList> measurementList(new MeasurementList());
   //(*parameterList).generate(); 

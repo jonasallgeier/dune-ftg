@@ -2,9 +2,11 @@
 cells = "50 35 10"
 extensions = "100 70 20"
 [ mean ]
-mean = "0.4"
+mean = "-9"
 variance = "0"
+[ randomField ]
+transform = "none"
 [ stochastic ]
 corrLength = "0.05"
 covariance = "exponential"
-variance = "0"
+variance = "2"

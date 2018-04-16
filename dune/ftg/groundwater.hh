@@ -700,7 +700,7 @@ namespace Dune {
             const Domain& cellCenterInside  = referenceElement(is.inside() .geometry()).position(0,0);
             const Domain& cellCenterOutside = referenceElement(is.outside().geometry()).position(0,0);
 
-            // conductivity
+            // b gconductivity
             const RF K_inside  = parameters.cond(is.inside(), cellCenterInside, time);
             const RF K_outside = parameters.cond(is.outside(),cellCenterOutside,time);
             const RF K = havg(K_inside,K_outside);
