@@ -41,7 +41,7 @@ void transientTransport(int argc, char** argv)
   ForwardModelList   forwardModelList(modelTraits);
   
   // define forward models for groundwater and transport
-  using GroundwaterModel  = ForwardModel<ModelTraits,ModelTypes::Groundwater, Formulation::Transient>;
+  using GroundwaterModel  = ForwardModel<ModelTraits,ModelTypes::Groundwater, Formulation::Stationary>;
   using TransportModel    = ForwardModel<ModelTraits,ModelTypes::Transport,   Formulation::Transient>;
   using GeoelectricsModel = ForwardModel<ModelTraits,ModelTypes::Geoelectrics,Formulation::Stationary>; //jonas
 

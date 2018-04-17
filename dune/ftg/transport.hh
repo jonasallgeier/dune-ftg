@@ -290,11 +290,12 @@ namespace Dune {
       class InitialValue<Traits, typename ModelTypes::Transport>
       : public InitialValueBase<Traits,InitialValue<Traits,ModelTypes::Transport> >
       {
+        
         const ModelParameters<Traits,ModelTypes::Transport>& parameters;
         const Traits& traits;
         typename Traits::GridTraits::Grid::LeafGridView lgv;
         using RF = typename Traits::GridTraits::RangeField;
-
+        
         std::vector<double> x_min;
         std::vector<double> x_max;
         std::vector<double> y_min;
@@ -304,7 +305,7 @@ namespace Dune {
         std::vector<double> volume;
         double totalvolume = 0.;
         RF tracermass;
-  
+        
         public:
           template<typename GV>
             InitialValue(
@@ -314,6 +315,7 @@ namespace Dune {
                 )
             : InitialValueBase<Traits,InitialValue<Traits,ModelTypes::Transport> >(gv), parameters(parameters_), traits(traits_), lgv(traits.grid().leafGridView())
             {
+              ///*
               // as the evaluateGlobal function only receives global coordinates, we need to access all injection cells and get their global
               // coordinate limits...
               tracermass = traits.config().template get<RF>("tracer.mass");
@@ -337,6 +339,7 @@ namespace Dune {
                   }
                 }
               }
+              //*/
             }
 
           template<typename Domain, typename Value>
@@ -344,6 +347,7 @@ namespace Dune {
             {
               // initialize concentration
               y[0] = 0.;
+              
               // if we have a tracer injection well, we have to set y<>0 according to the user specified tracer mass, porosity, etc.
               for (unsigned int i = 0; i!=x_min.size();i++)
               {
@@ -354,7 +358,7 @@ namespace Dune {
                     if (x[2] >= z_min[i] && x[2] < z_max[i]) 
                     {
                       // this gives problems if run in parallel and set to nonzero... why?
-                      y[0] =tracermass/totalvolume/parameters.porosity(x);
+                      y[0] = 10.;//tracermass/totalvolume/parameters.porosity(x);
                       break;
                     }
                   }
