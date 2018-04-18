@@ -114,7 +114,7 @@ namespace Dune {
           }
 	
 	      /**
-         * @brief Concentration at given position; jonas
+         * @brief Concentration at given position;
          */
         template<typename Element, typename Domain, typename Time>
           RF concentration(const Element& elem, const Domain& x, const Time& time) const
@@ -123,8 +123,6 @@ namespace Dune {
             //const auto& global  = elem.geometry().global(x);
             //const auto& xInside = elem.geometry().local(global);
             (*forwardStorage).value(time,elem,x,localConcentration);
-            //print output to see if it works
-            //std::cout << "concentration was called. value: " << localConcentration[0] << std::endl;
             return localConcentration[0];
           }
 
@@ -138,7 +136,7 @@ namespace Dune {
               DUNE_THROW(Dune::Exception,"groundwater model parameters not set in transport model parameters");
             
             const auto& global = is.geometry().global(x);
-            return (*groundwaterParams).flux(is,x,t)/porosity(global);
+            return (*groundwaterParams).flux(is,x,t)/porosity(global); // !!! division by porosity !!!
           }
 
         /**
@@ -182,7 +180,7 @@ namespace Dune {
         {
           groundwaterParams = otherParams;
         }
-        //registration geoelectrics; jonas
+
         void registerModel(
             const std::string& name,
             const std::shared_ptr<ModelParameters<Traits,ModelTypes::Geoelectrics> >& otherParams
@@ -190,23 +188,10 @@ namespace Dune {
         {
           // only needed for adjoint?
         }
-
-        //auto myhsearch() const
-        //{
-        //  auto& index_set = traits.grid().leafGridView().indexSet();
-        //  typedef Dune::HierarchicSearch<typename Traits::GridTraits::Grid, decltype(index_set)> HierarchicSearch;      // define how a hierarchic search object  looks like
-        //  HierarchicSearch hsearch(traits.grid(), index_set);  
-        //  return hsearch;
-        //};
         
-        //auto& myindex_set() const
-        //{
-        //  return traits.grid().leafGridView().indexSet();
-        //};
-        
-        std::vector<int> well_in_cells() const
+        std::vector<int> tracer_cell_indices() const
         {
-          return traits.read_well_in_cells();
+          return traits.read_tracer_cell_indices();
         };
 
       };
@@ -272,9 +257,9 @@ namespace Dune {
           EquationTraits(const Traits& traits)
             : fem(Dune::GeometryType(Dune::GeometryType::cube,dim)),
             space(traits.grid().levelGridView(0),fem)
-        {
-          space.ordering();
-        }
+          {
+            space.ordering();
+          }
 
           const GridFunctionSpace& gfs() const
           {
@@ -379,43 +364,45 @@ namespace Dune {
         
         const Traits & traits;
         const ModelParameters<Traits,ModelTypes::Transport>& parameters;
-        
         typename Traits::GridTraits::Grid::LeafGridView  lgv;
         using RF = typename Traits::GridTraits::RangeField;
-        //typename Traits::GridTraits::Grid::LeafGridView::IndexSet& index_set;
+        using IDomain = typename Traits::GridTraits::IDomain;
         RF tracermass;
         
         public:
 
           SourceTerm(const Traits& traits_, const ModelParameters<Traits,ModelTypes::Transport>& parameters_) : traits(traits_), parameters(parameters_), lgv(traits_.grid().leafGridView()) 
           {
-            
             tracermass = traits.config().template get<RF>("tracer.mass");
-            //index_set& = lgv.indexSet();
           }
 
           template<typename Element, typename Domain, typename Value, typename Time>
             auto q (const Element& elem, const Domain& x, const Value& value, const Time& t) const
             {
               
-              // if we are in one of the injection cells... && time is beginning
-              // add a source term in such a way that the released mass equals tracer.mass
+              // if we are in one of the injection cells... and time is beginning
+              // -> add a source term in such a way that the released mass equals tracer.mass
               if (t == 0)
               {
                 // get the index of the current cell
-                //auto index_set& = lgv.indexSet()
                 int the_index = lgv.indexSet().index(elem);
-                //int the_index = 1;                
-                for (unsigned int i = 0; i!=parameters.well_in_cells().size();i++)
+
+                for (unsigned int i = 0; i!=parameters.tracer_cell_indices().size();i++)
                 {
                   // check if the index matches with one of the injection well indices
-                  if (the_index == parameters.well_in_cells()[i]) 
+                  if (the_index == parameters.tracer_cell_indices()[i]) 
                   {
-                    // if so, return
-                    return 4.1*tracermass;
+                    // if so, evaluate the water flux leaving the cell
+                    RF v = 0.;
+                    for (const auto& intersection : intersections(lgv,elem))
+                    {
+                      const IDomain& faceCenterLocal = referenceElement(intersection.geometry()).position(0,0);
+                      v += parameters.porosity(intersection.geometry().global(faceCenterLocal)) * intersection.geometry().volume() * parameters.vNormal(intersection,faceCenterLocal,t);
+                    }
+                    return tracermass/v;  //TODO this is not yet correct
                   }
                 }
-                // if we end up here, we are not in an injection cell -> return 0.
+                // if we end up here, t=0 but we are not in an injection cell -> return 0.
                 return 0.;
               } else 
               {
@@ -572,7 +559,7 @@ namespace Dune {
         /**
          * @brief Boundary integral depending on test and ansatz functions
          */
-        // We put the Dirchlet evaluation also in the alpha term to save some geometry evaluations
+        // We put the Dirichlet evaluation also in the alpha term to save some geometry evaluations
         template<typename IG, typename LFSU, typename X, typename LFSV, typename R>
           void alpha_boundary (const IG& ig, 
               const LFSU& lfsu_s, const X& x_s, const LFSV& lfsv_s,

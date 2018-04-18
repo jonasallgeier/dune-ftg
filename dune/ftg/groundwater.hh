@@ -82,9 +82,8 @@ namespace Dune {
         void setMeasurementList(const std::shared_ptr<const MeasurementList>& list)
         {
           // this is a way of interacting with the measurementlist, however it does not help yet...
-          //auto mysub = (*list).get("groundwater"); 
+          //auto mysub = (*list).get("anything"); 
           //(*mysub).extract(*forwardStorage,10,20);
-          //std::cout << "this is the setMeasurementList method of the groundwater model" << std::endl;
         }
 
         /**
@@ -216,13 +215,13 @@ namespace Dune {
           return traits.grid().leafGridView().indexSet();
         };
 
-        std::vector<int> wellcells() const
+        std::vector<int> well_cell_indices() const
         {
-          return traits.read_wellcells();
+          return traits.read_well_cell_indices();
         };
-        std::vector<double> wellqs() const
+        std::vector<double> well_rates() const
         {
-          return traits.read_wellqs();
+          return traits.read_well_rates();
         };
       };
 
@@ -287,9 +286,9 @@ namespace Dune {
           EquationTraits(const Traits& traits)
             : fem(Dune::GeometryType(Dune::GeometryType::cube,dim)),
             space(traits.grid().levelGridView(0),fem)
-        {
-          space.ordering();
-        }
+          {
+            space.ordering();
+          }
 
           const GridFunctionSpace& gfs() const
           {
@@ -319,7 +318,7 @@ namespace Dune {
           template<typename Domain, typename Value>
             void evaluateGlobal(const Domain& x, Value& y) const
             {
-              // homogeneous initial conditions
+              // homogeneous initial/guess conditions
               y = 0.;
             }
       };
@@ -333,7 +332,9 @@ namespace Dune {
     template<typename Traits>
       class SourceTerm<Traits, ModelTypes::Groundwater, Direction::Forward>
       {
-        const ModelParameters<Traits,ModelTypes::Groundwater>& parameters;
+          const ModelParameters<Traits,ModelTypes::Groundwater>& parameters;
+          using RF  = typename Traits::GridTraits::RangeField;
+        
         public:
 
           SourceTerm(const ModelParameters<Traits,ModelTypes::Groundwater>& parameters_)
@@ -343,21 +344,19 @@ namespace Dune {
           template<typename Element, typename Domain, typename Time>
             auto q (const Element& elem, const Domain& x, const Time& t) const
             {
-              
               // initialize water pumping rate
-              auto I = 0.0;
+              RF I = 0.0;
               
-              std::vector<int> source_indices = parameters.wellcells();          // these are the indices of the cells containing wells
-              int current_index = parameters.index_set().index(elem); // this is the index of the cell we are looking at right now
+              std::vector<int> source_indices = parameters.well_cell_indices(); // these are the indices of the cells containing wells
+              int current_index = parameters.index_set().index(elem);     // this is the index of the cell we are looking at right now
               
-              //for(auto const& value: source_indices) 
-              //{
+              // go through all well cell indices and check if this cell is one of them
               for (unsigned int i = 0; i!=source_indices.size();i++)
               {
-                // check if the current cell contains a well, if so -> give it a source term
+                // check if the current cell contains a well, if so -> give it a source term according to its pumping rate
                 if (source_indices[i] == current_index)
                 {
-                  I = parameters.wellqs()[i];
+                  I = parameters.well_rates()[i];
                 }
               }
               return I;

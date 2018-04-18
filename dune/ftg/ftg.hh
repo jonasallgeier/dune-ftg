@@ -4,61 +4,68 @@
 #define DUNE_FTG_HH
 using namespace Dune::Modelling;
 
+// electrode position was already obtained; 
+// now, the coordinates of the electrodes are assigned to the cells they are located in
 template<typename ModelTraits>
-void setelectrodes(auto modelTraits)
+void set_electrodes(auto modelTraits)
 {
-  // electrode position was already obtained; now, the coordinates of the electrodes are assigned to the cells they are located in
-  const typename ModelTraits::GridTraits::Grid::LeafGridView& mygridview = modelTraits->grid().leafGridView(); // get leaf grid view
-  auto& index_set = mygridview.indexSet();                              //get index set
-  typedef Dune::HierarchicSearch<typename ModelTraits::GridTraits::Grid, decltype(index_set)> HierarchicSearch;      // define how a hierarchic search object  looks like
-  HierarchicSearch hsearch(modelTraits->grid(), index_set);              // define a hierarchic search object
+  // get gridview, index set and hierarchic search object
+  const typename ModelTraits::GridTraits::Grid::LeafGridView& mygridview = modelTraits->grid().leafGridView();
+  auto& index_set = mygridview.indexSet();
+  typedef Dune::HierarchicSearch<typename ModelTraits::GridTraits::Grid, decltype(index_set)> HierarchicSearch;
+  HierarchicSearch hsearch(modelTraits->grid(), index_set);
   
-  typename ModelTraits::GridTraits::Vector  electrode_coordinates;      // temporary vector containing coordinates of current electrode
+  typename ModelTraits::GridTraits::Vector  electrode_coordinates;        // temporary vector containing coordinates of current electrode
   int no_electrodes = modelTraits->electrodeconfiguration.no_electrodes; // total number of electrodes
-  auto electrode_cells = std::vector<int>(no_electrodes,-1);               // define a vector for electrode cell indices, is later given to modelTraits
+  auto electrode_cell_indices = std::vector<int>(no_electrodes,-1);            // vector for electrode cell indices, is later given to modelTraits
   
   for (int i = 0; i < no_electrodes; i++) // go through all electrodes and assign them  
   { 
     electrode_coordinates[0] = modelTraits->electrodeconfiguration.x_elec[i];  // get current coordinates
     electrode_coordinates[1] = modelTraits->electrodeconfiguration.y_elec[i];  // get current coordinates
     electrode_coordinates[2] = modelTraits->electrodeconfiguration.z_elec[i];  // get current coordinates
-    // throw exception, when a single electrode is outside of domain    
-    try
+        
+
+    try // in parallel, not every processor can assign all electrodes (-> domain decomposition)
     {
-      const auto test_answer = hsearch.findEntity(electrode_coordinates);     // find out which cell contains the electrode coordinates
-      electrode_cells[i] = index_set.index(test_answer);                      // assign the electrode coordinate  
-      //std::cout << "electrode " << i+1 << " of " << no_electrodes << " electrodes: "<<  electrode_coordinates << " -> " << electrode_cells[i] << std::endl; // get the cell and give output  
+      const auto elem = hsearch.findEntity(electrode_coordinates);     // find out which cell contains the electrode coordinates
+      electrode_cell_indices[i] = index_set.index(elem);               // assign the electrode coordinate  
+      
+      std::cout << "electrode coord... " << electrode_coordinates[0] << "; "<< electrode_coordinates[1] << "; "<< electrode_coordinates[2] << "(cell #"<< index_set.index(elem)<<")" <<std::endl;
+
+      std::cout << "element center...  " << elem.geometry().center()[0] << "; "<< elem.geometry().center()[1] << "; "<< elem.geometry().center()[2] << "(cell #"<< index_set.index(elem)<<")" <<std::endl;
+
     }
-    catch (Dune::Exception &e)
+    catch (Dune::Exception &e) {}
+  } 
+  // if there is an electrode that could not be localized, throw an exception! (check via. ini -1 cell index)
+  // TODO This does not work in parallel... maybe make use of another method...
+  /*std::vector<int>::iterator electrode_check = std::min_element(std::begin(electrode_cell_indices), std::end(electrode_cell_indices));
+  if (electrode_cell_indices[std::distance(std::begin(electrode_cell_indices), electrode_check)] == -1 ) 
     {
-      //std::cerr << "There is an electrode outside of the grid. This is not allowed!" << std::endl;
-      //throw;
-      //if (mygridview.comm().rank()==0)
-      //{ 
-      //std::cerr << "electrode could not be located!" << std::endl;
-      //}
+      for (auto value : electrode_cell_indices) {std::cout << value << "; ";}
+      std::cout << std::endl;
+      DUNE_THROW( Dune::GridError, "There is an electrode outside of the grid." );
     }
-    // if there is an electrode that could not be localized, throw an exception!
-    std::vector<int>::iterator electrode_check = std::min_element(std::begin(electrode_cells), std::end(electrode_cells));
-    if (electrode_cells[std::distance(std::begin(electrode_cells), electrode_check)] == -1 ) { DUNE_THROW( Dune::GridError, "There is an electrode outside of the grid." );}
-  }
-  modelTraits->set_electrodecells(electrode_cells); // give electrode cell indices to modelTraits
+  */
+  modelTraits->set_electrode_cell_indices(electrode_cell_indices); // give electrode cell indices to modelTraits
 
 }
 
-
+// well position was already obtained; 
+// now, the coordinates of the wells are assigned to the cells they are located in
 template<typename ModelTraits>
-void setwells(auto modelTraits)
+void set_wells(auto modelTraits)
 {
-  const typename ModelTraits::GridTraits::Grid::LeafGridView& mygridview = modelTraits->grid().leafGridView(); // get leaf grid view
-  auto& index_set = mygridview.indexSet();                              //get index set
+  const typename ModelTraits::GridTraits::Grid::LeafGridView& mygridview = modelTraits->grid().leafGridView();
+  auto& index_set = mygridview.indexSet();
   
   typename ModelTraits::GridTraits::Vector  well_coordinates;       // temporary vector containing coordinates of current well
   int no_wells = modelTraits->wellconfiguration.no_wells;           // total number of wells
-  std::vector<int> well_cells;         // define a vector for well cell indices, is later given to modelTraits
-  std::vector<double> well_qs;
-  std::vector<int> well_identities;
-  std::vector<bool> well_injectionindicator; // 1 if cell contains a tracer injection; 0 else
+  std::vector<int> well_cells;          // vector for well cell indices, is later given to modelTraits
+  std::vector<double> well_qs;          // vector for well pumping rates, is later given to modelTraits
+  std::vector<int> well_identities;     // int vector representing well identities (a cell can have contributions from two different wells)
+  std::vector<bool> well_injectionindicator; // true if cell contains a tracer injection; zero else
 
   std::vector<double> well_x = modelTraits->wellconfiguration.x_well;  
   std::vector<double> well_y = modelTraits->wellconfiguration.y_well;
@@ -81,14 +88,13 @@ void setwells(auto modelTraits)
     // go through all wells and check if they contribute to this cell
     for (int i = 0; i<no_wells; i++)
     {
-      //double tmp_q = 0;
       if (well_x[i]>=x_min && well_x[i]<x_max && well_y[i]>=y_min && well_y[i]<y_max)
       {
         if (well_z2[i] <= z_min || well_z1[i] >= z_max)
         {
           // well is outside of cell
         } else {
-          // well is inside of cell
+          // well is (partly) inside of cell
           well_cells.push_back(index_set.index(elem));
           well_qs.push_back(well_q[i]);
           well_identities.push_back(i);
@@ -98,7 +104,7 @@ void setwells(auto modelTraits)
     }
   }
 
-  // distribute well inflow across all participating cells
+  // distribute well injection rates equally across all participating cells
   for (int i = 0; i<no_wells;i++)
   {
     double tmp = count(well_identities.begin(), well_identities.end(), i);
@@ -108,33 +114,33 @@ void setwells(auto modelTraits)
     }
   }
   
-  // sum all distributions in a cell up
-  auto well_cells_new = well_cells;
-  std::sort( well_cells_new.begin(), well_cells_new.end() );
-  well_cells_new.erase( std::unique( well_cells_new.begin(), well_cells_new.end() ), well_cells_new.end() ); //get unique well cells
+  // sum all injection rate contributions in a cell up, if a single contribution injects tracer -> this is a tracer injection cell
+  auto well_cell_indices = well_cells;
+  std::sort(well_cell_indices.begin(), well_cell_indices.end());
+  well_cell_indices.erase( std::unique( well_cell_indices.begin(), well_cell_indices.end() ), well_cell_indices.end() ); //get unique well cells
   
-  std::vector<double> well_qs_new = std::vector<double>(well_cells_new.size());
-  std::vector<int> well_injectioncells;
+  std::vector<double> well_rates = std::vector<double>(well_cell_indices.size());
+  std::vector<int> tracer_cell_indices;
   
-  for (unsigned int i = 0; i!=well_cells_new.size();i++)
+  for (unsigned int i = 0; i!=well_cell_indices.size();i++)
   {
-    well_qs_new[i]=0;
+    well_rates[i]=0;
     for(unsigned int j = 0; j != well_qs.size(); j++) 
     {
-      if (well_cells[j]==well_cells_new[i]) 
+      if (well_cells[j]==well_cell_indices[i]) 
       {
-        well_qs_new[i] += well_qs[j];
-        if (well_injectionindicator[j] == true) {well_injectioncells.push_back(well_cells_new[i]);}
+        well_rates[i] += well_qs[j];
+        if (well_injectionindicator[j] == true) {tracer_cell_indices.push_back(well_cell_indices[i]);}
       }
     }
   }
   
-  // get unique injection well cells  
-  std::sort( well_injectioncells.begin(), well_injectioncells.end() );
-  well_injectioncells.erase( std::unique( well_injectioncells.begin(), well_injectioncells.end() ), well_injectioncells.end() ); //get unique well cells
+  // get unique injection well cells (-> remove duplicate information)
+  std::sort( tracer_cell_indices.begin(), tracer_cell_indices.end() );
+  tracer_cell_indices.erase( std::unique( tracer_cell_indices.begin(), tracer_cell_indices.end() ), tracer_cell_indices.end() );
 
 
-  modelTraits->set_wellcells(well_cells_new,well_qs_new,well_injectioncells); // give well cell indices to modelTraits
+  modelTraits->set_well_cell_indices(well_cell_indices,well_rates,tracer_cell_indices); // give well cell indices to modelTraits
 
 }
 

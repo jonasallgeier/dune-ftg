@@ -27,10 +27,10 @@ class GridHelper
 
   GridHelper(const Dune::ParameterTree& config)
   {
-    levels   = config.get<int>                       ("grid.levels"    ,1);
-    maxExt   = config.get<std::vector<DF> >          ("grid.extensions");    
-    lowerleft   = config.get<std::vector<DF> >          ("grid.lowerleft");   // get coordinates of lower left point
-    upperright   = config.get<std::vector<DF> >          ("grid.upperright"); // get coordinates of upper right point
+    levels      = config.get<int>                       ("grid.levels"    ,1);
+    maxExt      = config.get<std::vector<DF> >          ("grid.extensions");    
+    //lowerleft   = config.get<std::vector<DF> >          ("grid.lowerleft");   // get coordinates of lower left point
+    //upperright  = config.get<std::vector<DF> >          ("grid.upperright"); // get coordinates of upper right point
     
     //maxExt = std::vector<DF>(3);
     //for (int i=0; i <3; i++)
@@ -38,7 +38,7 @@ class GridHelper
     //  maxExt[i] = upperright[i]-lowerleft[i];
     //}    
     
-    maxCells = config.get<std::vector<unsigned int> >("grid.cells"     );
+    maxCells = config.get<std::vector<unsigned int> >("grid.cells");
 
     if (maxExt.size() != maxCells.size())
       DUNE_THROW(Dune::Exception,"cell and extension vectors differ in size");
@@ -64,6 +64,7 @@ class GridHelper
     return Lvector;
   }
   
+  /*
   //lower left point of grid
   Dune::FieldVector<DF,dim> LL() const
   {
@@ -85,7 +86,8 @@ class GridHelper
 
     return URvector;
   }
-  
+  */
+
   std::array<int,dim> N() const
   {
     std::array<int,dim> Nvector;
@@ -109,10 +111,10 @@ template<typename DF, typename RF, unsigned int dimension>
 class ModelTraits
 {
   private:
-  std::vector<int> electrodecells;
-  std::vector<int> wellcells;
-  std::vector<double> well_qs;
-  std::vector<int> well_in_cells;
+  std::vector<int> electrode_cell_indices;
+  std::vector<int> well_cell_indices;
+  std::vector<double> well_rates;
+  std::vector<int> tracer_cell_indices;
 
   public:
     // traits relating to geometry and underlying types
@@ -156,8 +158,6 @@ class ModelTraits
         void extract(const Storage& storage, const RF& firstTime, const RF& lastTime)
         {
           std::cout << "(would extract measurements " << firstTime << " to " << lastTime << ")" << std::endl;
-          //std::cout << "this is a test, to see if solution printing without VTK works" << std::endl;
-          //(*storage).value();
         }
       };
 
@@ -223,41 +223,41 @@ class ModelTraits
     }
 
     // provide the vector of grid indices that contain electrodes
-    std::vector<int> read_electrodecells() const
+    std::vector<int> read_electrode_cell_indices() const
     {
-      return electrodecells;
+      return electrode_cell_indices;
     }
 
     // mechanism to define the vector of grid indices that contain electrodes
-    void set_electrodecells(std::vector<int> in_electrodecells)
+    void set_electrode_cell_indices(std::vector<int> cell_indices)
     {
-      electrodecells = in_electrodecells;
+      electrode_cell_indices = cell_indices;
     }
 
     // provide the vector of grid indices that contain wells
-    std::vector<int> read_wellcells() const
+    std::vector<int> read_well_cell_indices() const
     {
-      return wellcells;
+      return well_cell_indices;
     }
 
     // provide the vector of pumping rates
-    std::vector<double> read_wellqs() const
+    std::vector<double> read_well_rates() const
     {
-      return well_qs;
+      return well_rates;
     }
 
     // provide the vector of pumping rates
-    std::vector<int> read_well_in_cells() const
+    std::vector<int> read_tracer_cell_indices() const
     {
-      return well_in_cells;
+      return tracer_cell_indices;
     }
 
     // mechanism to define the vector of grid indices that contain wells
-    void set_wellcells(std::vector<int> in_wellcells, std::vector<double> in_wellqs, std::vector<int> in_injection_cells)
+    void set_well_cell_indices(std::vector<int> in_well_cell_indices, std::vector<double> in_well_rates, std::vector<int> in_tracer_cell_indices)
     {
-      wellcells = in_wellcells;
-      well_qs = in_wellqs;
-      well_in_cells = in_injection_cells;
+      well_cell_indices = in_well_cell_indices;
+      well_rates = in_well_rates;
+      tracer_cell_indices = in_tracer_cell_indices;
     }  
 
     // define electrode configuration; it is read in from a file by the constructor of this struct
@@ -276,9 +276,7 @@ class ModelTraits
 	      std::ifstream file_econf; // open the file
           file_econf.open(electrodefilename);
           if (myrank == 0)
-          {          
-          std::cout << "Attempting to read electrode configuration file...";
-          }          
+            {std::cout << "Attempting to read electrode configuration file...";}          
           if (file_econf.is_open())
           {           
             file_econf >> no_electrodes;  //first line equals number of electrodes
@@ -308,13 +306,11 @@ class ModelTraits
             //close the file and give console output
             file_econf.close();
             if (myrank == 0)
-            { 
-            std::cout << " done. Found " << z_elec.size() << " electrodes." << std::endl;
-            }
+              {std::cout << " done. Found " << z_elec.size() << " electrode(s)." << std::endl;}
           }
           else
           {
-            DUNE_THROW(Dune::Exception,"Unable to read electrode configuration file. Please check file name. ");
+            DUNE_THROW(Dune::Exception,"Unable to read electrode configuration file. Please check file name.");
           }
         };
     };
@@ -325,12 +321,12 @@ class ModelTraits
     // define electrode configuration; it is read in from a file by the constructor of this struct
     struct WellConfiguration
     {
-        int no_wells;          // number of wells
-        std::vector<double> x_well; // vector of x coordinates
-        std::vector<double> y_well; // vector of y coordinates
-        std::vector<double> z1_well; // vector of z1 coordinates
-        std::vector<double> z2_well; // vector of z2 coordinates
-        std::vector<double> q_well; // vector of pumping rates
+        int no_wells;                     // number of wells
+        std::vector<double> x_well;       // vector of x coordinates
+        std::vector<double> y_well;       // vector of y coordinates
+        std::vector<double> z1_well;      // vector of z1 coordinates
+        std::vector<double> z2_well;      // vector of z2 coordinates
+        std::vector<double> q_well;       // vector of pumping rates
         std::vector<bool> injection_well; // vector of bools indicating whether this well participates the tracer injection 
 
         // constructor -> reads in the data from file
@@ -339,9 +335,7 @@ class ModelTraits
 	      std::ifstream file_wconf; // open the file
           file_wconf.open(wellfilename);
           if (myrank == 0)
-          {          
-          std::cout << "Attempting to read well configuration file...";
-          }          
+            {std::cout << "Attempting to read well configuration file...";}          
           if (file_wconf.is_open())
           {           
             file_wconf >> no_wells;  //first line equals number of electrodes
@@ -374,13 +368,11 @@ class ModelTraits
             //close the file and give console output
             file_wconf.close();
             if (myrank == 0)
-            { 
-            std::cout << " done. Found " << q_well.size() << " wells." << std::endl;
-            }
+              {std::cout << " done. Found " << q_well.size() << " well(s)." << std::endl;}
           }
           else
           {
-            DUNE_THROW(Dune::Exception,"Unable to read well configuration file. Please check file name. ");
+            DUNE_THROW(Dune::Exception,"Unable to read well configuration file. Please check file name.");
           }
         };
     };

@@ -11,7 +11,7 @@
 #include<dune/modelling/fluxreconstruction.hh>
 #include<dune/modelling/solutionstorage.hh>
 #include<dune/modelling/solvers.hh>
-#include<dune/grid/utility/hierarchicsearch.hh> //jonas
+#include<dune/grid/utility/hierarchicsearch.hh>
 
 namespace Dune {
   namespace Modelling {    
@@ -23,13 +23,13 @@ namespace Dune {
       : public ModelParametersBase<Traits>
       {
         using RF = typename Traits::GridTraits::RangeField;
-        //jonas <<
+        /*
         //using GridTraits = typename Traits::GridTraits;
         //using IndexSet = typename GridTraits::GridView::IndexSet;
         //using GFS        = typename EquationTraits<Traits,ModelTypes::Geoelectrics,Direction::Forward>::GridFunctionSpace;
         //using GridVector = typename EquationTraits<Traits,ModelTypes::Geoelectrics,Direction::Forward>::GridVector;
         //using ScalarDGF    = PDELab::DiscreteGridFunction<GFS,GridVector>;
-        // >>jonas
+        */
 
 
         using ParameterList   = typename Traits::ParameterList;
@@ -43,27 +43,21 @@ namespace Dune {
 
         std::shared_ptr<ParameterField> storativityField;
 
-        std::shared_ptr<const ModelParameters<Traits,ModelTypes::Transport> > transportParams; //jonas
+        std::shared_ptr<const ModelParameters<Traits,ModelTypes::Transport> > transportParams;
         
-        //const std::shared_ptr<ScalarDGF>    scalar; //jonas
-        //const IndexSet& indexSet; //jonas
+        //const std::shared_ptr<ScalarDGF>    scalar;
+        //const IndexSet& indexSet;
         
         public:
-        std::string model_name; //jonas
-        int model_number;
-
-
-
+          int model_number;
         
         ModelParameters(const Traits& traits_, const std::string& name)
           : ModelParametersBase<Traits>(name), traits(traits_)
         {
           // access the name of the model to know which electrode is active
-          model_name = name;          
-          std::string model_name_temp = model_name;
+          std::string model_name_temp = name;
           model_name_temp.erase(0,12); // get rid of "geoelectrics" to get the number n of the model "geoelectricsn"
           model_number = std::stoi(model_name_temp);
-          //std::cout << "model name is read in... " << model_name << std::endl;
         }
 
         /**
@@ -96,8 +90,7 @@ namespace Dune {
          */
         void setParameterList(const std::shared_ptr<const ParameterList>& list)
         {
-          //conductivityField = (*list).get("conductivity"); //jonas
-          //storativityField  = (*list).get("storativity_geoelectrics");
+          //conductivityField = (*list).get("conductivity");
         }
 
         /**
@@ -124,110 +117,20 @@ namespace Dune {
         {
           return traits.config().template get<RF>("time.maxStep");
         }
-        
-        /**
-         * @brief Conductivity value at given position
-         */
-        //template<typename Element, typename Domain, typename Time>          //not needed; jonas
-        //  RF cond(const Element& elem, const Domain& x, const Time& t) const
-        //  {
-        //    if (!conductivityField)
-        //    {
-        //      std::cout << "ModelParameters::cond " << this->name() << " " << this << std::endl;
-        //      DUNE_THROW(Dune::Exception,"conductivity field not set in geoelectrics model parameters");
-        //    }
-        //
-        //    typename Traits::GridTraits::Scalar value;
-        //    (*conductivityField).evaluate(elem,x,value);
-        //    return value[0];
-        //  }
-        
-        
-        
-        
-        //the total number of electrodes
-        //int number_of_electrodes() const //jonas
-        //{
-        //  return traits.electrodeconfiguration.no_electrodes;
-        //};
-        
-        //vector containing the electrodes names
-        //std::vector<int> electrodes_names() const //jonas
-        //{
-        //  return traits.electrodeconfiguration.name_elec;
-        //};
-        
-        //vector containing the x values of the electrodes
-        //std::vector<double> electrodes_x() const //jonas
-        //{
-        //  return traits.electrodeconfiguration.x_elec;
-        //};
-        
-        //vector containgin the y values of the electrodes
-        //std::vector<double> electrodes_y() const //jonas
-        //{
-        //  return traits.electrodeconfiguration.y_elec;
-        //};
-
-        //vector containgin the z values of the electrodes
-        //std::vector<double> electrodes_z() const //jonas
-        //{
-        //  return traits.electrodeconfiguration.z_elec;
-        //};
 
         // the cell with this index contains the electrode for this model
-        auto electrodecell() const
+        auto electrode_cell_index() const
         {
-          auto all_electrodecells = traits.read_electrodecells();
-          return all_electrodecells[model_number];
+          return traits.read_electrode_cell_indices()[model_number];
         };
-
-        //std::vector<double> electrodecell_midpoint() const
-        //{
-        //  auto mytestvector = std::vector<double>(3);
-        //  mytestvector[0] = traits.electrodeconfiguration.x_elec[model_number];
-        //  mytestvector[1] = traits.electrodeconfiguration.y_elec[model_number];
-        //  mytestvector[2] = traits.electrodeconfiguration.z_elec[model_number];
-        //  return mytestvector;
-        //};
-        
-        // provide a gridview for the index set
-        //auto mygridview() const
-        //{
-        //  return traits.grid().leafGridView();
-        //};
         
         // provide an index set to compare cells with the electrode cell
         auto& index_set() const
         {
           return traits.grid().leafGridView().indexSet();
         };
-  
 
-        
-        
-        /**
-         * @brief Storativity value at given position
-         */
-         /* jonas, not needed, stationary for a single time step!
-        template<typename Element, typename Domain, typename Time>
-          RF stor(const Element& elem, const Domain& x, const Time& t) const
-          {
-            if (!storativityField)    //jonas
-            {
-              std::cout << "ModelParameters::stor " << this->name() << " " << this << std::endl;
-              DUNE_THROW(Dune::Exception,"storativity field not set in geoelectrics model parameters");
-            }
-
-            typename Traits::GridTraits::Scalar value;
-            (*storativityField).evaluate(elem,x,value);
-            return value[0];
-          }
-          */
-
-        /**
-         * @brief el. conductivity based on concentration transformation in each element; jonas
-         */
+        // electrical conductivity based on concentration transformation in each element
         template<typename Element, typename Domain, typename Time>
           RF cond (const Element& elem, const Domain& x, const Time& time) const
           {
@@ -377,9 +280,9 @@ namespace Dune {
           EquationTraits(const Traits& traits)
             : fem(Dune::GeometryType(Dune::GeometryType::cube,dim)),
             space(traits.grid().levelGridView(0),fem)
-        {
-          space.ordering();
-        }
+          {
+            space.ordering();
+          }
 
           const GridFunctionSpace& gfs() const
           {
@@ -425,31 +328,25 @@ namespace Dune {
       {
         const ModelParameters<Traits,ModelTypes::Geoelectrics>& parameters;
         public:
-          //SourceTerm(const ModelParameters<Traits,ModelTypes::Geoelectrics>& parameters)
-          //{}
           
           SourceTerm(const ModelParameters<Traits,ModelTypes::Geoelectrics>& parameters_)
           : parameters(parameters_)
           {}
           
           template<typename Element, typename Domain, typename Time>
-            auto q (const Element& elem, const Domain& x, const Time& t) const //jonas
-            { 
-              // define a rangefield
-              using RF     = typename Traits::GridTraits::RangeField;
+            auto q (const Element& elem, const Domain& x, const Time& t) const
+            {
+              using RF = typename Traits::GridTraits::RangeField;
               
               // initialize electric current
               RF I = 0.0;
               
-              int source_index = parameters.electrodecell();          // this is the index of the cell containing the electrode
+              int source_index = parameters.electrode_cell_index();   // this is the index of the cell containing the electrode
               int current_index = parameters.index_set().index(elem); // this is the index of the cell we are looking at right now
               
               // check if the current cell contains the electrode, if so -> give it a source term
               if (source_index == current_index)
               {
-                //std::cout << "current cell midpoint: " << elem.geometry().center();
-                //auto temp_vec = parameters.electrodecell_midpoint();
-                //std::cout << " | electrode coordinates: " << temp_vec[0] << " " << temp_vec[1] << " " << temp_vec[2] << std::endl;
                 I = 1.0;
               }
               return I;
@@ -871,7 +768,7 @@ namespace Dune {
     /**
      * @brief Temporal local operator of the geoelectrics equation (CCFV version)
      */
-    /*jonas, stationary! no temporal operator needed
+    /* stationary! no temporal operator needed
     template<typename Traits, typename DirectionType>
       class TemporalOperator<Traits, ModelTypes::Geoelectrics, Discretization::CellCenteredFiniteVolume, DirectionType>
       : public Dune::PDELab::NumericalJacobianVolume
@@ -888,7 +785,7 @@ namespace Dune {
 
         const ModelParameters<Traits,ModelTypes::Geoelectrics>& parameters;
         
-        RF time;    //jonas        
+        RF time;        
 
         public:
 
@@ -917,9 +814,9 @@ namespace Dune {
             const RF cell_volume = eg.geometry().volume();
             const Domain& cellCenterLocal = referenceElement(eg.geometry()).position(0,0);
             
-            //test if access to concentrations is possible; jonas
-            //const RF conc_local = parameters.conc(eg.entity(),cellCenterLocal,time); // jonas
-            //std::cout << "concentration was received. value: " << conc_local << "; time in model was: " << time << std::endl; //jonas
+            //test if access to concentrations is possible; 
+            //const RF conc_local = parameters.conc(eg.entity(),cellCenterLocal,time);
+            //std::cout << "concentration was received. value: " << conc_local << "; time in model was: " << time << std::endl;
   
             if (DirectionType::isAdjoint())
               r.accumulate(lfsv,0, - parameters.stor(eg.entity(),cellCenterLocal,time) * x(lfsu,0) * cell_volume);
