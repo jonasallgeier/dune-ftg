@@ -290,7 +290,7 @@ namespace Dune {
       class InitialValue<Traits, typename ModelTypes::Transport>
       : public InitialValueBase<Traits,InitialValue<Traits,ModelTypes::Transport> >
       {
-        
+        /*
         const ModelParameters<Traits,ModelTypes::Transport>& parameters;
         const Traits& traits;
         typename Traits::GridTraits::Grid::LeafGridView lgv;
@@ -305,7 +305,7 @@ namespace Dune {
         std::vector<double> volume;
         double totalvolume = 0.;
         RF tracermass;
-        
+        */
         public:
           template<typename GV>
             InitialValue(
@@ -313,9 +313,9 @@ namespace Dune {
                 const GV& gv,
                 const ModelParameters<Traits,ModelTypes::Transport>& parameters_
                 )
-            : InitialValueBase<Traits,InitialValue<Traits,ModelTypes::Transport> >(gv), parameters(parameters_), traits(traits_), lgv(traits.grid().leafGridView())
+            : InitialValueBase<Traits,InitialValue<Traits,ModelTypes::Transport> >(gv)//, parameters(parameters_), traits(traits_), lgv(traits.grid().leafGridView())
             {
-              ///*
+              /*
               // as the evaluateGlobal function only receives global coordinates, we need to access all injection cells and get their global
               // coordinate limits...
               tracermass = traits.config().template get<RF>("tracer.mass");
@@ -339,7 +339,7 @@ namespace Dune {
                   }
                 }
               }
-              //*/
+              */
             }
 
           template<typename Domain, typename Value>
@@ -347,7 +347,7 @@ namespace Dune {
             {
               // initialize concentration
               y[0] = 0.;
-              
+              /*
               // if we have a tracer injection well, we have to set y<>0 according to the user specified tracer mass, porosity, etc.
               for (unsigned int i = 0; i!=x_min.size();i++)
               {
@@ -363,7 +363,7 @@ namespace Dune {
                     }
                   }
                 }
-              }
+              } */
             }
       };
 
@@ -376,22 +376,59 @@ namespace Dune {
     template<typename Traits>
       class SourceTerm<Traits, ModelTypes::Transport, Direction::Forward>
       {
+        
+        const Traits & traits;
+        const ModelParameters<Traits,ModelTypes::Transport>& parameters;
+        
+        typename Traits::GridTraits::Grid::LeafGridView  lgv;
+        using RF = typename Traits::GridTraits::RangeField;
+        //typename Traits::GridTraits::Grid::LeafGridView::IndexSet& index_set;
+        RF tracermass;
+        
         public:
 
-          SourceTerm(const ModelParameters<Traits,ModelTypes::Transport>& parameters)
-          {}
+          SourceTerm(const Traits& traits_, const ModelParameters<Traits,ModelTypes::Transport>& parameters_) : traits(traits_), parameters(parameters_), lgv(traits_.grid().leafGridView()) 
+          {
+            
+            tracermass = traits.config().template get<RF>("tracer.mass");
+            //index_set& = lgv.indexSet();
+          }
 
           template<typename Element, typename Domain, typename Value, typename Time>
             auto q (const Element& elem, const Domain& x, const Value& value, const Time& t) const
             {
-              // no source term
-              return 0.;
+              
+              // if we are in one of the injection cells... && time is beginning
+              // add a source term in such a way that the released mass equals tracer.mass
+              if (t == 0)
+              {
+                // get the index of the current cell
+                //auto index_set& = lgv.indexSet()
+                int the_index = lgv.indexSet().index(elem);
+                //int the_index = 1;                
+                for (unsigned int i = 0; i!=parameters.well_in_cells().size();i++)
+                {
+                  // check if the index matches with one of the injection well indices
+                  if (the_index == parameters.well_in_cells()[i]) 
+                  {
+                    // if so, return
+                    return 4.1*tracermass;
+                  }
+                }
+                // if we end up here, we are not in an injection cell -> return 0.
+                return 0.;
+              } else 
+              {
+                // no source term
+                return 0.;
+              }
             }
       };
 
     /**
      * @brief Source term of adjoint solute transport equation
      */
+    /*
     template<typename Traits>
       class SourceTerm<Traits, ModelTypes::Transport, Direction::Adjoint>
       {
@@ -410,7 +447,7 @@ namespace Dune {
             return parameters.adjointSource(elem,x,t);
           }
       };
-
+    */
     /**
      * @brief Define transport equation as a differential equation
      */
@@ -476,7 +513,7 @@ namespace Dune {
             const Traits& traits_,
             const ModelParameters<Traits,ModelTypes::Transport>& parameters_
             )
-          : traits(traits_), parameters(parameters_), boundary(traits,parameters.name()), sourceTerm(parameters)
+          : traits(traits_), parameters(parameters_), boundary(traits,parameters.name()), sourceTerm(traits,parameters)
         {
           if (DirectionType::isAdjoint())
             adjointSign = -1.;

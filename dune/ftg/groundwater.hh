@@ -343,6 +343,7 @@ namespace Dune {
           template<typename Element, typename Domain, typename Time>
             auto q (const Element& elem, const Domain& x, const Time& t) const
             {
+              
               // initialize water pumping rate
               auto I = 0.0;
               
