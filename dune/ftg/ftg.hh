@@ -31,9 +31,9 @@ void set_electrodes(auto modelTraits)
       const auto elem = hsearch.findEntity(electrode_coordinates);     // find out which cell contains the electrode coordinates
       electrode_cell_indices[i] = index_set.index(elem);               // assign the electrode coordinate  
       
-      std::cout << "electrode coord... " << electrode_coordinates[0] << "; "<< electrode_coordinates[1] << "; "<< electrode_coordinates[2] << "(cell #"<< index_set.index(elem)<<")" <<std::endl;
+      //std::cout << "electrode coord... " << electrode_coordinates[0] << "; "<< electrode_coordinates[1] << "; "<< electrode_coordinates[2] << "(cell #"<< index_set.index(elem)<<")" <<std::endl;
 
-      std::cout << "element center...  " << elem.geometry().center()[0] << "; "<< elem.geometry().center()[1] << "; "<< elem.geometry().center()[2] << "(cell #"<< index_set.index(elem)<<")" <<std::endl;
+      //std::cout << "element center...  " << elem.geometry().center()[0] << "; "<< elem.geometry().center()[1] << "; "<< elem.geometry().center()[2] << "(cell #"<< index_set.index(elem)<<")" <<std::endl;
 
     }
     catch (Dune::Exception &e) {}

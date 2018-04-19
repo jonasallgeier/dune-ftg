@@ -1,12 +1,11 @@
 [ grid ]
+extensions = "100.00 70.00 20.00"
 cells = "50 35 10"
-extensions = "100 70 20"
-[ mean ]
-mean = "-9"
-variance = "0"
+
 [ randomField ]
-transform = "none"
+transform = none
+
 [ stochastic ]
-corrLength = "0.05"
+variance = 0
 covariance = "exponential"
-variance = "2"
+

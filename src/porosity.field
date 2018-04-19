@@ -1,9 +1,0 @@
-[ stochastic ]
-corrLength = 0.05
-covariance = exponential
-#variance   = 0.01
-variance   = 0
-
-[ mean ]
-mean       = 0.4
-variance   = 0
