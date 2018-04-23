@@ -10,8 +10,9 @@
 #include <dune/common/exceptions.hh>
 
 // use slightly modified versions of dune/modelling/boundary.hh and ./equation.hh
-#include<dune/ftg/boundary.hh>
-#include<dune/ftg/equation.hh>
+#include<dune/ftg/override/boundary.hh>
+#include<dune/ftg/override/equation.hh>
+#include<dune/ftg/override/forwardmodel.hh>
 #include<dune/modelling/forwardmodel.hh>
 #include<dune/modelling/forwardadjointmodel.hh>
 
@@ -21,6 +22,7 @@
 #include<dune/ftg/geoelectrics.hh>
 #include<dune/ftg/ftg.hh>
 #include<fstream>
+#include<algorithm>
 
 using namespace Dune::Modelling;
 

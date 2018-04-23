@@ -41,12 +41,10 @@ namespace Dune {
         std::shared_ptr<SolutionStorage<Traits,ModelTypes::Geoelectrics,Direction::Forward> > forwardStorage;
         std::shared_ptr<SolutionStorage<Traits,ModelTypes::Geoelectrics,Direction::Adjoint> > adjointStorage;
 
-        std::shared_ptr<ParameterField> storativityField;
+        std::shared_ptr<ParameterField> sigma_bgField;
+        std::shared_ptr<ParameterField> kappaField;
 
         std::shared_ptr<const ModelParameters<Traits,ModelTypes::Transport> > transportParams;
-        
-        //const std::shared_ptr<ScalarDGF>    scalar;
-        //const IndexSet& indexSet;
         
         public:
           int model_number;
@@ -90,7 +88,8 @@ namespace Dune {
          */
         void setParameterList(const std::shared_ptr<const ParameterList>& list)
         {
-          //conductivityField = (*list).get("conductivity");
+          sigma_bgField = (*list).get("sigma_bg");
+          kappaField = (*list).get("kappa");
         }
 
         /**
@@ -102,12 +101,17 @@ namespace Dune {
           //std::cout << "this is the setMeasurementList method of the geoelectrics model" << std::endl;
         }
 
+        RF timestep() const
+        {
+          return traits.config().template get<RF>("time.step_geoelectrics");
+        }
+
         /**
          * @brief Minimum time stepsize accepted by model
          */
         RF minTimestep() const
         {
-          return traits.config().template get<RF>("time.minStep");
+          return timestep();
         }
 
         /**
@@ -115,11 +119,11 @@ namespace Dune {
          */
         RF maxTimestep() const
         {
-          return traits.config().template get<RF>("time.maxStep");
+          return timestep();
         }
 
         // the cell with this index contains the electrode for this model
-        auto electrode_cell_index() const
+        unsigned int electrode_cell_index() const
         {
           return traits.read_electrode_cell_indices()[model_number];
         };
@@ -134,13 +138,20 @@ namespace Dune {
         template<typename Element, typename Domain, typename Time>
           RF cond (const Element& elem, const Domain& x, const Time& time) const
           {
-            if (!transportParams)
-              DUNE_THROW(Dune::Exception,"transport model parameters not set in geoelectrics model parameters");
-            
+            if (!kappaField || !sigma_bgField)
+            {
+              std::cout << "ModelParameters::cond " << this->name() << " " << this << std::endl;
+              DUNE_THROW(Dune::Exception,"kappa or sigma_bg field not set in geoelectrics model parameters");
+            }
+
+            typename Traits::GridTraits::Scalar kappa;
+            (*kappaField).evaluate(elem,x,kappa);
+
+            typename Traits::GridTraits::Scalar sigma_bg;
+            (*sigma_bgField).evaluate(elem,x,sigma_bg);           
+
             //transform concentration to an electric conductivity
-            RF transformation_factor1 = 0.06;
-            RF transformation_factor2 = 0.03;
-            return (*transportParams).concentration(elem,x,time)*transformation_factor1+transformation_factor2;
+            return (*transportParams).concentration(elem,x,time)*kappa[0]+sigma_bg[0];
           }
 
         /**
@@ -341,8 +352,8 @@ namespace Dune {
               // initialize electric current
               RF I = 0.0;
               
-              int source_index = parameters.electrode_cell_index();   // this is the index of the cell containing the electrode
-              int current_index = parameters.index_set().index(elem); // this is the index of the cell we are looking at right now
+              unsigned int source_index = parameters.electrode_cell_index();   // this is the index of the cell containing the electrode
+              unsigned int current_index = parameters.index_set().index(elem); // this is the index of the cell we are looking at right now
               
               // check if the current cell contains the electrode, if so -> give it a source term
               if (source_index == current_index)

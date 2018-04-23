@@ -4,7 +4,7 @@ home
 
 load common_traits.mat
 
-names = {'conductivity','storativity','porosity'};
+names = {'conductivity','storativity','porosity','sigma_bg','kappa'};
 
 % definition of general properties of grid
 extents = [100 70 20]; % X, Y, Z
@@ -36,4 +36,8 @@ field_generation_routine
 porosity
 field_generation_routine
 storativity
+field_generation_routine
+kappa
+field_generation_routine
+background_sigma
 field_generation_routine

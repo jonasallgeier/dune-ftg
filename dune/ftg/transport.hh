@@ -83,12 +83,17 @@ namespace Dune {
           //std::cout << "this is the setMeasurementList method of the transport model" << std::endl;
         }
 
+        RF timestep() const
+        {
+          return traits.config().template get<RF>("time.step_transport");
+        }
+
         /**
          * @brief Minimum time stepsize accepted by model
          */
         RF minTimestep() const
         {
-          return traits.config().template get<RF>("time.minStep");
+          return timestep();
         }
 
         /**
@@ -96,7 +101,7 @@ namespace Dune {
          */
         RF maxTimestep() const
         {
-          return traits.config().template get<RF>("time.maxStep");
+          return timestep();
         }
 
         /**
@@ -189,9 +194,19 @@ namespace Dune {
           // only needed for adjoint?
         }
         
-        std::vector<int> tracer_cell_indices() const
+        std::vector<unsigned int> tracer_cell_indices() const
         {
           return traits.read_tracer_cell_indices();
+        };
+
+        std::vector<unsigned int> well_cell_indices() const
+        {
+          return traits.read_well_cell_indices();
+        };
+
+        std::vector<double> well_rates() const
+        {
+          return traits.read_well_rates();
         };
 
       };
@@ -275,22 +290,6 @@ namespace Dune {
       class InitialValue<Traits, typename ModelTypes::Transport>
       : public InitialValueBase<Traits,InitialValue<Traits,ModelTypes::Transport> >
       {
-        /*
-        const ModelParameters<Traits,ModelTypes::Transport>& parameters;
-        const Traits& traits;
-        typename Traits::GridTraits::Grid::LeafGridView lgv;
-        using RF = typename Traits::GridTraits::RangeField;
-        
-        std::vector<double> x_min;
-        std::vector<double> x_max;
-        std::vector<double> y_min;
-        std::vector<double> y_max;
-        std::vector<double> z_min;
-        std::vector<double> z_max;
-        std::vector<double> volume;
-        double totalvolume = 0.;
-        RF tracermass;
-        */
         public:
           template<typename GV>
             InitialValue(
@@ -298,57 +297,14 @@ namespace Dune {
                 const GV& gv,
                 const ModelParameters<Traits,ModelTypes::Transport>& parameters_
                 )
-            : InitialValueBase<Traits,InitialValue<Traits,ModelTypes::Transport> >(gv)//, parameters(parameters_), traits(traits_), lgv(traits.grid().leafGridView())
-            {
-              /*
-              // as the evaluateGlobal function only receives global coordinates, we need to access all injection cells and get their global
-              // coordinate limits...
-              tracermass = traits.config().template get<RF>("tracer.mass");
-              auto &index_set = lgv.indexSet();
-              for (const auto & elem : elements (lgv))
-              {
-                int the_index = index_set.index(elem);
-                for (unsigned int i = 0; i!=parameters.well_in_cells().size();i++)
-                {
-                  if (the_index == parameters.well_in_cells()[i]) 
-                  {
-                    //std::cout << "the index is " << the_index << std::endl;
-                    x_min.push_back(elem.geometry().corner(0)[0]);
-                    x_max.push_back(elem.geometry().corner(1)[0]);
-                    y_min.push_back(elem.geometry().corner(0)[1]);
-                    y_max.push_back(elem.geometry().corner(2)[1]);
-                    z_min.push_back(elem.geometry().corner(0)[2]);
-                    z_max.push_back(elem.geometry().corner(4)[2]);
-                    volume.push_back(elem.geometry().volume());
-                    totalvolume += elem.geometry().volume();
-                  }
-                }
-              }
-              */
-            }
+            : InitialValueBase<Traits,InitialValue<Traits,ModelTypes::Transport> >(gv)
+            {}
 
           template<typename Domain, typename Value>
             void evaluateGlobal(const Domain& x, Value& y) const
             {
               // initialize concentration
               y[0] = 0.;
-              /*
-              // if we have a tracer injection well, we have to set y<>0 according to the user specified tracer mass, porosity, etc.
-              for (unsigned int i = 0; i!=x_min.size();i++)
-              {
-                if (x[0] >= x_min[i] && x[0] < x_max[i]) 
-                {
-                  if (x[1] >= y_min[i] && x[1] < y_max[i]) 
-                  {
-                    if (x[2] >= z_min[i] && x[2] < z_max[i]) 
-                    {
-                      // this gives problems if run in parallel and set to nonzero... why?
-                      y[0] = 10.;//tracermass/totalvolume/parameters.porosity(x);
-                      break;
-                    }
-                  }
-                }
-              } */
             }
       };
 
@@ -361,45 +317,77 @@ namespace Dune {
     template<typename Traits>
       class SourceTerm<Traits, ModelTypes::Transport, Direction::Forward>
       {
-        
         const Traits & traits;
         const ModelParameters<Traits,ModelTypes::Transport>& parameters;
         typename Traits::GridTraits::Grid::LeafGridView  lgv;
         using RF = typename Traits::GridTraits::RangeField;
         using IDomain = typename Traits::GridTraits::IDomain;
-        RF tracermass;
+        RF c_in;
+        double t_in;
         
         public:
 
           SourceTerm(const Traits& traits_, const ModelParameters<Traits,ModelTypes::Transport>& parameters_) : traits(traits_), parameters(parameters_), lgv(traits_.grid().leafGridView()) 
           {
-            tracermass = traits.config().template get<RF>("tracer.mass");
+            c_in = traits.config().template get<RF>("tracer.c_in");
+            t_in = traits.config().template get<double>("tracer.t_in");
           }
 
           template<typename Element, typename Domain, typename Value, typename Time>
             auto q (const Element& elem, const Domain& x, const Value& value, const Time& t) const
             {
-              
+              // get the index of the current cell
+              unsigned int the_index = lgv.indexSet().index(elem);            
+
+              for (unsigned int i = 0; i!=parameters.well_cell_indices().size();i++)
+              {
+                if (the_index == parameters.well_cell_indices()[i])
+                {
+                  if (parameters.well_rates()[i] < 0)
+                  {
+                    return value*parameters.well_rates()[i];
+                  }
+                  else if (parameters.well_rates()[i] > 0 && t <= t_in)
+                  {
+                    // check if this cell is a tracer injection cell
+                    auto injection_cells = parameters.tracer_cell_indices(); 
+                    if(std::find(injection_cells.begin(), injection_cells.end(), the_index) != injection_cells.end())
+                    {
+                      return c_in*parameters.well_rates()[i];
+                    }
+                  }
+                }
+              }
+              // if we end up here, this cell is neither source nor sink
+              return 0.;
+
+
+
+
+
+
+
+              /*
               // if we are in one of the injection cells... and time is beginning
-              // -> add a source term in such a way that the released mass equals tracer.mass
-              if (t == 0)
+              // -> add a source term in such a way that the released mass equals ........
+                            
+              if (t <= t_in)
               {
                 // get the index of the current cell
-                int the_index = lgv.indexSet().index(elem);
-
+                unsigned int the_index = lgv.indexSet().index(elem);
                 for (unsigned int i = 0; i!=parameters.tracer_cell_indices().size();i++)
                 {
                   // check if the index matches with one of the injection well indices
                   if (the_index == parameters.tracer_cell_indices()[i]) 
                   {
                     // if so, evaluate the water flux leaving the cell
-                    RF v = 0.;
+                    RF q_out = 0.;
                     for (const auto& intersection : intersections(lgv,elem))
                     {
                       const IDomain& faceCenterLocal = referenceElement(intersection.geometry()).position(0,0);
-                      v += parameters.porosity(intersection.geometry().global(faceCenterLocal)) * intersection.geometry().volume() * parameters.vNormal(intersection,faceCenterLocal,t);
+                      q_out += parameters.porosity(intersection.geometry().global(faceCenterLocal)) * intersection.geometry().volume() * parameters.vNormal(intersection,faceCenterLocal,t);
                     }
-                    return tracermass/v;  //TODO this is not yet correct
+                    return hereissomethingmissing;  //TODO this is not yet correct
                   }
                 }
                 // if we end up here, t=0 but we are not in an injection cell -> return 0.
@@ -409,6 +397,7 @@ namespace Dune {
                 // no source term
                 return 0.;
               }
+              */
             }
       };
 

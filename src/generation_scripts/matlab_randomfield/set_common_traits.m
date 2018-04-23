@@ -15,6 +15,6 @@ cells = [50 35 10]; % X, Y, Z
 cell_tops = linspace(0,extents(3),cells(3)+1);
 cell_tops = cell_tops(2:end);
 
-vtk_out = false;
+vtk_out = true;
 
 save common_traits.mat

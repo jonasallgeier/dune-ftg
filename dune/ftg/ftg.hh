@@ -17,7 +17,7 @@ void set_electrodes(auto modelTraits)
   
   typename ModelTraits::GridTraits::Vector  electrode_coordinates;        // temporary vector containing coordinates of current electrode
   int no_electrodes = modelTraits->electrodeconfiguration.no_electrodes; // total number of electrodes
-  auto electrode_cell_indices = std::vector<int>(no_electrodes,-1);            // vector for electrode cell indices, is later given to modelTraits
+  auto electrode_cell_indices = std::vector<unsigned int>(no_electrodes,-1);            // vector for electrode cell indices, is later given to modelTraits
   
   for (int i = 0; i < no_electrodes; i++) // go through all electrodes and assign them  
   { 
@@ -62,7 +62,7 @@ void set_wells(auto modelTraits)
   
   typename ModelTraits::GridTraits::Vector  well_coordinates;       // temporary vector containing coordinates of current well
   int no_wells = modelTraits->wellconfiguration.no_wells;           // total number of wells
-  std::vector<int> well_cells;          // vector for well cell indices, is later given to modelTraits
+  std::vector<unsigned int> well_cells;          // vector for well cell indices, is later given to modelTraits
   std::vector<double> well_qs;          // vector for well pumping rates, is later given to modelTraits
   std::vector<int> well_identities;     // int vector representing well identities (a cell can have contributions from two different wells)
   std::vector<bool> well_injectionindicator; // true if cell contains a tracer injection; zero else
@@ -115,12 +115,12 @@ void set_wells(auto modelTraits)
   }
   
   // sum all injection rate contributions in a cell up, if a single contribution injects tracer -> this is a tracer injection cell
-  auto well_cell_indices = well_cells;
+  std::vector<unsigned int> well_cell_indices = well_cells;
   std::sort(well_cell_indices.begin(), well_cell_indices.end());
   well_cell_indices.erase( std::unique( well_cell_indices.begin(), well_cell_indices.end() ), well_cell_indices.end() ); //get unique well cells
   
   std::vector<double> well_rates = std::vector<double>(well_cell_indices.size());
-  std::vector<int> tracer_cell_indices;
+  std::vector<unsigned int> tracer_cell_indices;
   
   for (unsigned int i = 0; i!=well_cell_indices.size();i++)
   {

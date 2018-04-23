@@ -86,12 +86,17 @@ namespace Dune {
           //(*mysub).extract(*forwardStorage,10,20);
         }
 
+        RF timestep() const
+        {
+          return traits.config().template get<RF>("time.step_flow");
+        }
+
         /**
          * @brief Minimum time stepsize accepted by model
          */
         RF minTimestep() const
         {
-          return traits.config().template get<RF>("time.minStep");
+          return timestep();
         }
 
         /**
@@ -99,7 +104,7 @@ namespace Dune {
          */
         RF maxTimestep() const
         {
-          return traits.config().template get<RF>("time.maxStep");
+          return timestep();
         }
 
         /**
@@ -114,6 +119,17 @@ namespace Dune {
               DUNE_THROW(Dune::Exception,"conductivity field not set in groundwater model parameters");
             }
 
+            // if we are in a well cell, set K=1 for hydraulic shortcut
+            unsigned int the_index = index_set().index(elem);
+            for (unsigned int well_index : well_cell_indices())
+            {
+              if (well_index == the_index)
+              {
+                typename Traits::GridTraits::Scalar value;
+                value = 1.0;
+                return value[0];
+              }
+            }
             typename Traits::GridTraits::Scalar value;
             (*conductivityField).evaluate(elem,x,value);
             return value[0];
@@ -125,7 +141,7 @@ namespace Dune {
         template<typename Element, typename Domain, typename Time>
           RF stor(const Element& elem, const Domain& x, const Time& t) const
           {
-            if (!conductivityField)
+            if (!storativityField)
             {
               std::cout << "ModelParameters::stor " << this->name() << " " << this << std::endl;
               DUNE_THROW(Dune::Exception,"storativity field not set in groundwater model parameters");
@@ -215,7 +231,7 @@ namespace Dune {
           return traits.grid().leafGridView().indexSet();
         };
 
-        std::vector<int> well_cell_indices() const
+        std::vector<unsigned int> well_cell_indices() const
         {
           return traits.read_well_cell_indices();
         };
@@ -347,8 +363,8 @@ namespace Dune {
               // initialize water pumping rate
               RF I = 0.0;
               
-              std::vector<int> source_indices = parameters.well_cell_indices(); // these are the indices of the cells containing wells
-              int current_index = parameters.index_set().index(elem);     // this is the index of the cell we are looking at right now
+              std::vector<unsigned int> source_indices = parameters.well_cell_indices(); // these are the indices of the cells containing wells
+              unsigned int current_index = parameters.index_set().index(elem);     // this is the index of the cell we are looking at right now
               
               // go through all well cell indices and check if this cell is one of them
               for (unsigned int i = 0; i!=source_indices.size();i++)

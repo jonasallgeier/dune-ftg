@@ -111,10 +111,10 @@ template<typename DF, typename RF, unsigned int dimension>
 class ModelTraits
 {
   private:
-  std::vector<int> electrode_cell_indices;
-  std::vector<int> well_cell_indices;
+  std::vector<unsigned int> electrode_cell_indices;
+  std::vector<unsigned int> well_cell_indices;
   std::vector<double> well_rates;
-  std::vector<int> tracer_cell_indices;
+  std::vector<unsigned int> tracer_cell_indices;
 
   public:
     // traits relating to geometry and underlying types
@@ -223,19 +223,19 @@ class ModelTraits
     }
 
     // provide the vector of grid indices that contain electrodes
-    std::vector<int> read_electrode_cell_indices() const
+    std::vector<unsigned int> read_electrode_cell_indices() const
     {
       return electrode_cell_indices;
     }
 
     // mechanism to define the vector of grid indices that contain electrodes
-    void set_electrode_cell_indices(std::vector<int> cell_indices)
+    void set_electrode_cell_indices(std::vector<unsigned int> cell_indices)
     {
       electrode_cell_indices = cell_indices;
     }
 
     // provide the vector of grid indices that contain wells
-    std::vector<int> read_well_cell_indices() const
+    std::vector<unsigned int> read_well_cell_indices() const
     {
       return well_cell_indices;
     }
@@ -246,14 +246,14 @@ class ModelTraits
       return well_rates;
     }
 
-    // provide the vector of pumping rates
-    std::vector<int> read_tracer_cell_indices() const
+    // provide the vector of cell indices of tracer injection cells
+    std::vector<unsigned int> read_tracer_cell_indices() const
     {
       return tracer_cell_indices;
     }
 
     // mechanism to define the vector of grid indices that contain wells
-    void set_well_cell_indices(std::vector<int> in_well_cell_indices, std::vector<double> in_well_rates, std::vector<int> in_tracer_cell_indices)
+    void set_well_cell_indices(std::vector<unsigned int> in_well_cell_indices, std::vector<double> in_well_rates, std::vector<unsigned int> in_tracer_cell_indices)
     {
       well_cell_indices = in_well_cell_indices;
       well_rates = in_well_rates;
