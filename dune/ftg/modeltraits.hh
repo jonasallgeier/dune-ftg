@@ -112,17 +112,16 @@ class ModelTraits
 {
   private:
   std::vector<unsigned int> electrode_cell_indices;
-  std::vector<unsigned int> well_cell_indices;
-  std::vector<double> well_rates;
-  std::vector<unsigned int> tracer_cell_indices;
-
+  std::set<unsigned int> electrode_cell_indices_alt;
+  std::map<unsigned int, std::pair<RF, bool>> well_cells;
+  
   public:
     // traits relating to geometry and underlying types
     struct GridTraits
     {
       enum {dim = dimension};
       using Grid     = Dune::YaspGrid<dim>;
-//      using Grid     = Dune::YaspGrid<dim,Dune::EquidistantOffsetCoordinates<double, dim> >;
+//      using Grid     = Dune::YaspGrid<dim,Dune::EquidistantOffsetCoordinates<DF, dim> >;
       using GridView = typename Grid::LevelGridView;
 
       using RangeField   = RF;
@@ -234,40 +233,24 @@ class ModelTraits
       electrode_cell_indices = cell_indices;
     }
 
-    // provide the vector of grid indices that contain wells
-    std::vector<unsigned int> read_well_cell_indices() const
+    void set_well_cells(std::map<unsigned int, std::pair<RF, bool>> in_well_cells)
     {
-      return well_cell_indices;
+      well_cells = in_well_cells;
     }
 
-    // provide the vector of pumping rates
-    std::vector<double> read_well_rates() const
+    std::map<unsigned int, std::pair<RF, bool>> read_well_cells() const
     {
-      return well_rates;
+      return well_cells;
     }
-
-    // provide the vector of cell indices of tracer injection cells
-    std::vector<unsigned int> read_tracer_cell_indices() const
-    {
-      return tracer_cell_indices;
-    }
-
-    // mechanism to define the vector of grid indices that contain wells
-    void set_well_cell_indices(std::vector<unsigned int> in_well_cell_indices, std::vector<double> in_well_rates, std::vector<unsigned int> in_tracer_cell_indices)
-    {
-      well_cell_indices = in_well_cell_indices;
-      well_rates = in_well_rates;
-      tracer_cell_indices = in_tracer_cell_indices;
-    }  
 
     // define electrode configuration; it is read in from a file by the constructor of this struct
     struct ElectrodeConfiguration
     {
         int no_electrodes;          // number of electrodes
         std::vector<int> name_elec; // name vector
-        std::vector<double> x_elec; // vector of x coordinates
-        std::vector<double> y_elec; // vector of y coordinates
-        std::vector<double> z_elec; // vector of z coordinates
+        std::vector<RF> x_elec; // vector of x coordinates
+        std::vector<RF> y_elec; // vector of y coordinates
+        std::vector<RF> z_elec; // vector of z coordinates
         std::vector<int> surf_elec; // vector containing information if electrode is a surface electrode 
 
         // constructor -> reads in the data from file
@@ -283,9 +266,9 @@ class ModelTraits
    
             //declare temporary storage variables
             int tmp_name;
-            double tmp_x;
-            double tmp_y;
-            double tmp_z;
+            RF tmp_x;
+            RF tmp_y;
+            RF tmp_z;
             int tmp_surf;
         
             //read data in lines {#,x,y,z,s} from file via temp to vector 
@@ -318,15 +301,15 @@ class ModelTraits
     //call constructor to read in electrode configuration from file specified in .ini; data is stored in a struct object
     ElectrodeConfiguration electrodeconfiguration {duneConfig.get<std::string>("configfiles.electrodes"),rank()};
 
-    // define electrode configuration; it is read in from a file by the constructor of this struct
+    // define well configuration; it is read in from a file by the constructor of this struct
     struct WellConfiguration
     {
         int no_wells;                     // number of wells
-        std::vector<double> x_well;       // vector of x coordinates
-        std::vector<double> y_well;       // vector of y coordinates
-        std::vector<double> z1_well;      // vector of z1 coordinates
-        std::vector<double> z2_well;      // vector of z2 coordinates
-        std::vector<double> q_well;       // vector of pumping rates
+        std::vector<RF> x_well;       // vector of x coordinates
+        std::vector<RF> y_well;       // vector of y coordinates
+        std::vector<RF> z1_well;      // vector of z1 coordinates
+        std::vector<RF> z2_well;      // vector of z2 coordinates
+        std::vector<RF> q_well;       // vector of pumping rates
         std::vector<bool> injection_well; // vector of bools indicating whether this well participates the tracer injection 
 
         // constructor -> reads in the data from file
@@ -338,14 +321,14 @@ class ModelTraits
             {std::cout << "Attempting to read well configuration file...";}          
           if (file_wconf.is_open())
           {           
-            file_wconf >> no_wells;  //first line equals number of electrodes
+            file_wconf >> no_wells;  //first line equals number of wells
    
             //declare temporary storage variables
-            double tmp_x;
-            double tmp_y;
-            double tmp_z1;
-            double tmp_z2;
-            double tmp_q;
+            RF tmp_x;
+            RF tmp_y;
+            RF tmp_z1;
+            RF tmp_z2;
+            RF tmp_q;
             bool tmp_in;
         
             //read data in lines {#,x,y,z,s} from file via temp to vector 
@@ -377,7 +360,7 @@ class ModelTraits
         };
     };
     
-    //call constructor to read in electrode configuration from file specified in .ini; data is stored in a struct object
+    //call constructor to read in well configuration from file specified in .ini; data is stored in a struct object
     WellConfiguration wellconfiguration {duneConfig.get<std::string>("configfiles.wells"),rank()};    
 };
 

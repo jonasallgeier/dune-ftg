@@ -315,7 +315,7 @@ namespace Dune {
                 }
               }
               
-              if (list.back().second->forwardFinished() == false)
+              if (list.back().second->forwardFinished() == false && list.size() != 1)
               {
                   RF timestep = list.back().second->suggestTimestepForward();
                   RF time = list.back().second->getTime();
@@ -324,33 +324,12 @@ namespace Dune {
                     list.back().second->stepForward(timestep);
                     time = list.back().second->getTime();
                   }
+              } else if (list.back().second->forwardFinished() == false && list.size() == 1)
+              {
+                RF timestep = list.back().second->suggestTimestepForward();
+                list.back().second->stepForward(timestep);
               }
             }
-            /*
-            while (!forwardFinished())
-            {
-              using RF = typename Traits::GridTraits::RangeField;
-
-              std::vector<RF> timesteps;
-              std::vector<RF> currenttimes;
-
-              for (const ModelPair& pair : list)
-              {
-                timesteps.push_back(pair.second->suggestTimestepForward());
-                currenttimes.push_back(pair.second->getTime());
-	          }
-
-              auto smallest_time = std::min_element(std::begin(currenttimes), std::end(currenttimes));
-
-              for (unsigned int i = 0; i!=currenttimes.size();i++)
-              {
-                if (currenttimes[i] == *smallest_time)
-                {
-                  list[i].second->stepForward(timesteps[i]);
-                }
-              }
-            }
-            */
           }
 
           /**
@@ -434,9 +413,6 @@ namespace Dune {
            */
           bool forwardFinished() const
           {
-            //bool finished = false;
-            //for(const ModelPair& pair : list)
-            //  finished = finished || pair.second->forwardFinished();
             bool finished = true;
             for(const ModelPair& pair : list)
               finished = finished && pair.second->forwardFinished();

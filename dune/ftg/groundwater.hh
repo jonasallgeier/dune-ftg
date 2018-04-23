@@ -119,20 +119,20 @@ namespace Dune {
               DUNE_THROW(Dune::Exception,"conductivity field not set in groundwater model parameters");
             }
 
-            // if we are in a well cell, set K=1 for hydraulic shortcut
-            unsigned int the_index = index_set().index(elem);
-            for (unsigned int well_index : well_cell_indices())
-            {
-              if (well_index == the_index)
+              unsigned int current_index = index_set().index(elem);
+              auto temp = well_cells().find(current_index);
+
+              if ( !(temp->first == well_cells().end()->first) ) 
               {
+                // a well cell -> return very high conductivity to achieve "shortcut"
                 typename Traits::GridTraits::Scalar value;
                 value = 1.0;
                 return value[0];
               }
-            }
-            typename Traits::GridTraits::Scalar value;
-            (*conductivityField).evaluate(elem,x,value);
-            return value[0];
+              // no well cell
+              typename Traits::GridTraits::Scalar value;
+              (*conductivityField).evaluate(elem,x,value);
+              return value[0];
           }
 
         /**
@@ -231,13 +231,9 @@ namespace Dune {
           return traits.grid().leafGridView().indexSet();
         };
 
-        std::vector<unsigned int> well_cell_indices() const
+        std::map<unsigned int, std::pair<RF, bool>> well_cells() const
         {
-          return traits.read_well_cell_indices();
-        };
-        std::vector<double> well_rates() const
-        {
-          return traits.read_well_rates();
+          return traits.read_well_cells();
         };
       };
 
@@ -350,32 +346,28 @@ namespace Dune {
       {
           const ModelParameters<Traits,ModelTypes::Groundwater>& parameters;
           using RF  = typename Traits::GridTraits::RangeField;
-        
+          std::map<unsigned int, std::pair<RF, bool>> well_cells;
         public:
 
           SourceTerm(const ModelParameters<Traits,ModelTypes::Groundwater>& parameters_)
           : parameters(parameters_)
-          {}
+          {
+            well_cells = parameters.well_cells();
+          }
 
           template<typename Element, typename Domain, typename Time>
             auto q (const Element& elem, const Domain& x, const Time& t) const
             {
               // initialize water pumping rate
-              RF I = 0.0;
               
-              std::vector<unsigned int> source_indices = parameters.well_cell_indices(); // these are the indices of the cells containing wells
-              unsigned int current_index = parameters.index_set().index(elem);     // this is the index of the cell we are looking at right now
-              
-              // go through all well cell indices and check if this cell is one of them
-              for (unsigned int i = 0; i!=source_indices.size();i++)
+              unsigned int current_index = parameters.index_set().index(elem);
+              auto temp = well_cells.find(current_index);
+
+              if ( !(temp->first == well_cells.end()->first) ) 
               {
-                // check if the current cell contains a well, if so -> give it a source term according to its pumping rate
-                if (source_indices[i] == current_index)
-                {
-                  I = parameters.well_rates()[i];
-                }
+                return (temp->second).first; // a well cell, return extraction rate
               }
-              return I;
+              return 0.0; // no well cell
             }
       };
 
@@ -787,60 +779,6 @@ namespace Dune {
           {
             const T eps = 1e-30;
             return 2./(1./(a + eps) + 1./(b + eps));
-          }
-
-      };
-
-    /**
-     * @brief Temporal local operator of the groundwater flow equation (CCFV version)
-     */
-    template<typename Traits, typename DirectionType>
-      class TemporalOperator<Traits, ModelTypes::Groundwater, Discretization::CellCenteredFiniteVolume, DirectionType>
-      : public Dune::PDELab::NumericalJacobianVolume
-      <TemporalOperator<Traits, ModelTypes::Groundwater, Discretization::CellCenteredFiniteVolume, DirectionType> >,
-      public Dune::PDELab::FullVolumePattern,
-      public Dune::PDELab::LocalOperatorDefaultFlags,
-      public Dune::PDELab::InstationaryLocalOperatorDefaultMethods<typename Traits::GridTraits::RangeField>
-      {
-        using GridTraits = typename Traits::GridTraits;
-
-        using RF     = typename GridTraits::RangeField;
-        using DF     = typename GridTraits::DomainField;
-        using Domain = typename GridTraits::Domain;
-
-        const ModelParameters<Traits,ModelTypes::Groundwater>& parameters;
-
-        public:
-
-        // pattern assembly flags
-        enum {doPatternVolume = true};
-
-        // residual assembly flags
-        enum {doAlphaVolume = true};
-
-        /**
-         * @brief Constructor
-         */
-        TemporalOperator(
-            const Traits& traits,
-            const ModelParameters<Traits,ModelTypes::Groundwater>& parameters_
-            )
-          : parameters(parameters_)
-        {}
-
-        /**
-         * @brief Volume integral depending on test and ansatz functions
-         */
-        template<typename EG, typename LFSU, typename X, typename LFSV, typename R>
-          void alpha_volume (const EG& eg, const LFSU& lfsu, const X& x, const LFSV& lfsv, R& r) const
-          {
-            const RF cell_volume = eg.geometry().volume();
-            const Domain& cellCenterLocal = referenceElement(eg.geometry()).position(0,0);
-
-            if (DirectionType::isAdjoint())
-              r.accumulate(lfsv,0, - parameters.stor(eg.entity(),cellCenterLocal,time) * x(lfsu,0) * cell_volume);
-            else
-              r.accumulate(lfsv,0,   parameters.stor(eg.entity(),cellCenterLocal,time) * x(lfsu,0) * cell_volume);
           }
 
       };

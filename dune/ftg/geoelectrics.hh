@@ -46,6 +46,7 @@ namespace Dune {
 
         std::shared_ptr<const ModelParameters<Traits,ModelTypes::Transport> > transportParams;
         
+        unsigned int electrode_cell_indx;
         public:
           int model_number;
         
@@ -56,6 +57,8 @@ namespace Dune {
           std::string model_name_temp = name;
           model_name_temp.erase(0,12); // get rid of "geoelectrics" to get the number n of the model "geoelectricsn"
           model_number = std::stoi(model_name_temp);
+
+          electrode_cell_indx = traits.read_electrode_cell_indices()[model_number];
         }
 
         /**
@@ -125,7 +128,7 @@ namespace Dune {
         // the cell with this index contains the electrode for this model
         unsigned int electrode_cell_index() const
         {
-          return traits.read_electrode_cell_indices()[model_number];
+          return electrode_cell_indx;
         };
         
         // provide an index set to compare cells with the electrode cell
@@ -775,68 +778,6 @@ namespace Dune {
           }
 
       };
-
-    /**
-     * @brief Temporal local operator of the geoelectrics equation (CCFV version)
-     */
-    /* stationary! no temporal operator needed
-    template<typename Traits, typename DirectionType>
-      class TemporalOperator<Traits, ModelTypes::Geoelectrics, Discretization::CellCenteredFiniteVolume, DirectionType>
-      : public Dune::PDELab::NumericalJacobianVolume
-      <TemporalOperator<Traits, ModelTypes::Geoelectrics, Discretization::CellCenteredFiniteVolume, DirectionType> >,
-      public Dune::PDELab::FullVolumePattern,
-      public Dune::PDELab::LocalOperatorDefaultFlags,
-      public Dune::PDELab::InstationaryLocalOperatorDefaultMethods<typename Traits::GridTraits::RangeField>
-      {
-        using GridTraits = typename Traits::GridTraits;
-
-        using RF     = typename GridTraits::RangeField;
-        using DF     = typename GridTraits::DomainField;
-        using Domain = typename GridTraits::Domain;
-
-        const ModelParameters<Traits,ModelTypes::Geoelectrics>& parameters;
-        
-        RF time;        
-
-        public:
-
-        // pattern assembly flags
-        enum {doPatternVolume = true};
-
-        // residual assembly flags
-        enum {doAlphaVolume = true};
-
-        **
-         * @brief Constructor
-         *
-        TemporalOperator(
-            const Traits& traits,
-            const ModelParameters<Traits,ModelTypes::Geoelectrics>& parameters_
-            )
-          : parameters(parameters_)
-        {}
-
-        **
-         * @brief Volume integral depending on test and ansatz functions
-         *
-        template<typename EG, typename LFSU, typename X, typename LFSV, typename R>
-          void alpha_volume (const EG& eg, const LFSU& lfsu, const X& x, const LFSV& lfsv, R& r) const
-          {
-            const RF cell_volume = eg.geometry().volume();
-            const Domain& cellCenterLocal = referenceElement(eg.geometry()).position(0,0);
-            
-            //test if access to concentrations is possible; 
-            //const RF conc_local = parameters.conc(eg.entity(),cellCenterLocal,time);
-            //std::cout << "concentration was received. value: " << conc_local << "; time in model was: " << time << std::endl;
-  
-            if (DirectionType::isAdjoint())
-              r.accumulate(lfsv,0, - parameters.stor(eg.entity(),cellCenterLocal,time) * x(lfsu,0) * cell_volume);
-            else
-              r.accumulate(lfsv,0,   parameters.stor(eg.entity(),cellCenterLocal,time) * x(lfsu,0) * cell_volume);
-          }
-
-      };
-    */
     
     /**
      * @brief Class providing sensitivity computation for geoelectrics flow

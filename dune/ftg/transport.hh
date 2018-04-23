@@ -193,20 +193,10 @@ namespace Dune {
         {
           // only needed for adjoint?
         }
-        
-        std::vector<unsigned int> tracer_cell_indices() const
-        {
-          return traits.read_tracer_cell_indices();
-        };
 
-        std::vector<unsigned int> well_cell_indices() const
+        std::map<unsigned int, std::pair<RF, bool>> well_cells() const
         {
-          return traits.read_well_cell_indices();
-        };
-
-        std::vector<double> well_rates() const
-        {
-          return traits.read_well_rates();
+          return traits.read_well_cells();
         };
 
       };
@@ -323,81 +313,38 @@ namespace Dune {
         using RF = typename Traits::GridTraits::RangeField;
         using IDomain = typename Traits::GridTraits::IDomain;
         RF c_in;
-        double t_in;
-        
+        RF t_in;
+        std::map<unsigned int, std::pair<RF, bool>> well_cells;
+
         public:
 
           SourceTerm(const Traits& traits_, const ModelParameters<Traits,ModelTypes::Transport>& parameters_) : traits(traits_), parameters(parameters_), lgv(traits_.grid().leafGridView()) 
           {
             c_in = traits.config().template get<RF>("tracer.c_in");
-            t_in = traits.config().template get<double>("tracer.t_in");
+            t_in = traits.config().template get<RF>("tracer.t_in");
+            well_cells = parameters.well_cells();
           }
 
           template<typename Element, typename Domain, typename Value, typename Time>
             auto q (const Element& elem, const Domain& x, const Value& value, const Time& t) const
             {
               // get the index of the current cell
-              unsigned int the_index = lgv.indexSet().index(elem);            
+              unsigned int current_index = lgv.indexSet().index(elem);
+              auto temp = well_cells.find(current_index);
 
-              for (unsigned int i = 0; i!=parameters.well_cell_indices().size();i++)
-              {
-                if (the_index == parameters.well_cell_indices()[i])
+              if ( !(temp->first == well_cells.end()->first) ) 
+              {  
+                if ( (temp->second).first <0) // an extraction well cell
                 {
-                  if (parameters.well_rates()[i] < 0)
-                  {
-                    return value*parameters.well_rates()[i];
-                  }
-                  else if (parameters.well_rates()[i] > 0 && t <= t_in)
-                  {
-                    // check if this cell is a tracer injection cell
-                    auto injection_cells = parameters.tracer_cell_indices(); 
-                    if(std::find(injection_cells.begin(), injection_cells.end(), the_index) != injection_cells.end())
-                    {
-                      return c_in*parameters.well_rates()[i];
-                    }
-                  }
+                  return (temp->second).first*value; // rate multiplied with concentration
+                } 
+                else if ( (temp->second).second == true && t <= t_in) // a tracer injection cell
+                {
+                  return (temp->second).first*c_in; // rate multiplied with concentration
                 }
               }
               // if we end up here, this cell is neither source nor sink
-              return 0.;
-
-
-
-
-
-
-
-              /*
-              // if we are in one of the injection cells... and time is beginning
-              // -> add a source term in such a way that the released mass equals ........
-                            
-              if (t <= t_in)
-              {
-                // get the index of the current cell
-                unsigned int the_index = lgv.indexSet().index(elem);
-                for (unsigned int i = 0; i!=parameters.tracer_cell_indices().size();i++)
-                {
-                  // check if the index matches with one of the injection well indices
-                  if (the_index == parameters.tracer_cell_indices()[i]) 
-                  {
-                    // if so, evaluate the water flux leaving the cell
-                    RF q_out = 0.;
-                    for (const auto& intersection : intersections(lgv,elem))
-                    {
-                      const IDomain& faceCenterLocal = referenceElement(intersection.geometry()).position(0,0);
-                      q_out += parameters.porosity(intersection.geometry().global(faceCenterLocal)) * intersection.geometry().volume() * parameters.vNormal(intersection,faceCenterLocal,t);
-                    }
-                    return hereissomethingmissing;  //TODO this is not yet correct
-                  }
-                }
-                // if we end up here, t=0 but we are not in an injection cell -> return 0.
-                return 0.;
-              } else 
-              {
-                // no source term
-                return 0.;
-              }
-              */
+              return 0.0;
             }
       };
 

@@ -9,10 +9,11 @@
 #include <dune/common/parallel/mpihelper.hh>
 #include <dune/common/exceptions.hh>
 
-// use slightly modified versions of dune/modelling/boundary.hh and ./equation.hh
+// use slightly modified versions of dune/modelling/boundary.hh, ./equation.hh and ./forwardmodel.hh
 #include<dune/ftg/override/boundary.hh>
 #include<dune/ftg/override/equation.hh>
 #include<dune/ftg/override/forwardmodel.hh>
+
 #include<dune/modelling/forwardmodel.hh>
 #include<dune/modelling/forwardadjointmodel.hh>
 
@@ -21,13 +22,14 @@
 #include<dune/ftg/transport.hh>
 #include<dune/ftg/geoelectrics.hh>
 #include<dune/ftg/ftg.hh>
-#include<fstream>
-#include<algorithm>
 
 using namespace Dune::Modelling;
 
 void transientTransport(int argc, char** argv)
 {
+  Dune::Timer totalTimer;
+  totalTimer.start();
+
   // initialize MPI if available
   Dune::MPIHelper& helper = Dune::MPIHelper::instance(argc, argv);
 
@@ -55,7 +57,7 @@ void transientTransport(int argc, char** argv)
   
   set_electrodes<ModelTraits>(&modelTraits);
   set_wells<ModelTraits>(&modelTraits);
-
+  
   //generate N geoelectrics models for N electrodes
   std::stringstream temp_ss;
   for (int i = 0; i < modelTraits.electrodeconfiguration.no_electrodes; i++)
@@ -74,12 +76,15 @@ void transientTransport(int argc, char** argv)
   using ParameterList   = ModelTraits::ParameterList;
   using MeasurementList = ModelTraits::MeasurementList;
   std::shared_ptr<ParameterList>   parameterList  (new ParameterList(config.template get<std::string>("fields.location")));
-  //std::shared_ptr<ParameterList>   parameterList  (new ParameterList(config));
   std::shared_ptr<MeasurementList> measurementList(new MeasurementList());
-  //(*parameterList).generate(); 
 
   // perform forward run
   forwardModelList.solve(parameterList,measurementList);
+  
+  // give output of total elapsed time  
+  totalTimer.stop();
+  if (helper.rank() == 0)
+    std::cout << "Total time elapsed: " << totalTimer.elapsed() << std::endl;
 }
 
 int main(int argc, char** argv)
