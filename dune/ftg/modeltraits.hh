@@ -16,7 +16,7 @@ class GridHelper
   enum {dim = GT::dim};
 
   typedef typename GT::DomainField DF;
-  //typedef typename GT::RangeField RF;
+  typedef typename GT::RangeField RF;
 
   int levels;
   std::vector<DF> maxExt;
@@ -29,14 +29,14 @@ class GridHelper
   {
     levels      = config.get<int>                       ("grid.levels"    ,1);
     maxExt      = config.get<std::vector<DF> >          ("grid.extensions");    
-    //lowerleft   = config.get<std::vector<DF> >          ("grid.lowerleft");   // get coordinates of lower left point
-    //upperright  = config.get<std::vector<DF> >          ("grid.upperright"); // get coordinates of upper right point
+    lowerleft   = config.get<std::vector<DF> >          ("grid.lowerleft");   // get coordinates of lower left point
+    upperright  = config.get<std::vector<DF> >          ("grid.upperright"); // get coordinates of upper right point
     
-    //maxExt = std::vector<DF>(3);
-    //for (int i=0; i <3; i++)
-    //{
-    //  maxExt[i] = upperright[i]-lowerleft[i];
-    //}    
+    maxExt = std::vector<DF>(3);
+    for (int i=0; i <3; i++)
+    {
+      maxExt[i] = upperright[i]-lowerleft[i];
+    }    
     
     maxCells = config.get<std::vector<unsigned int> >("grid.cells");
 
@@ -64,7 +64,7 @@ class GridHelper
     return Lvector;
   }
   
-  /*
+  
   //lower left point of grid
   Dune::FieldVector<DF,dim> LL() const
   {
@@ -86,7 +86,7 @@ class GridHelper
 
     return URvector;
   }
-  */
+  
 
   std::array<int,dim> N() const
   {
@@ -112,7 +112,6 @@ class ModelTraits
 {
   private:
   std::vector<unsigned int> electrode_cell_indices;
-  std::set<unsigned int> electrode_cell_indices_alt;
   std::map<unsigned int, std::pair<RF, bool>> well_cells;
   
   public:
@@ -120,8 +119,8 @@ class ModelTraits
     struct GridTraits
     {
       enum {dim = dimension};
-      using Grid     = Dune::YaspGrid<dim>;
-//      using Grid     = Dune::YaspGrid<dim,Dune::EquidistantOffsetCoordinates<DF, dim> >;
+//      using Grid     = Dune::YaspGrid<dim>;
+      using Grid     = Dune::YaspGrid<dim,Dune::EquidistantOffsetCoordinates<DF, dim> >;
       using GridView = typename Grid::LevelGridView;
 
       using RangeField   = RF;
@@ -182,16 +181,16 @@ class ModelTraits
     const GridHelper<GridTraits> gh;
     typename GridTraits::Grid yaspGrid;
       
-    ModelTraits(Dune::MPIHelper& helper_, Dune::ParameterTree& duneConfig_)
-      : helper(helper_), duneConfig(duneConfig_), gh(duneConfig),
-      yaspGrid(gh.L(),gh.N(),gh.B(),1)
-    {
-    }
 //    ModelTraits(Dune::MPIHelper& helper_, Dune::ParameterTree& duneConfig_)
 //      : helper(helper_), duneConfig(duneConfig_), gh(duneConfig),
-//      yaspGrid(gh.LL(),gh.UR(),gh.N(),gh.B(),1)
+//      yaspGrid(gh.L(),gh.N(),gh.B(),1)
 //    {
 //    }
+    ModelTraits(Dune::MPIHelper& helper_, Dune::ParameterTree& duneConfig_)
+      : helper(helper_), duneConfig(duneConfig_), gh(duneConfig),
+      yaspGrid(gh.LL(),gh.UR(),gh.N(),gh.B(),1)
+    {
+    }
 
 
 
