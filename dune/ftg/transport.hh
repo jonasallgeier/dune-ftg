@@ -245,7 +245,7 @@ namespace Dune {
           // store complete space-time solution
           // alternative: only store last two steps
           template<typename... T>
-            using StorageContainer = FullContainer<T...>;
+            using StorageContainer = LastTwoContainer<T...>;
 
           // use previous timestep when interpolating stored solution
           // alternatives: NextTimestep and LinearInterpolation

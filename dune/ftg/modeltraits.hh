@@ -156,7 +156,10 @@ class ModelTraits
         template<typename Storage>
         void extract(const Storage& storage, const RF& firstTime, const RF& lastTime)
         {
+          //auto mytest = rank();
+          //auto mytest = (*storage).traits; // no possible... traits are private!
           std::cout << "(would extract measurements " << firstTime << " to " << lastTime << ")" << std::endl;
+          //(*storage).value(time,elem,x,output);
         }
       };
 

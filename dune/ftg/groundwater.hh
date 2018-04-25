@@ -27,6 +27,7 @@ namespace Dune {
         using ParameterList   = typename Traits::ParameterList;
         using ParameterField  = typename ParameterList::SubRandomField;
         using MeasurementList = typename Traits::MeasurementList;
+        using SubMeasurements = typename MeasurementList::SubMeasurements;
 
         const Traits& traits;
 
@@ -81,6 +82,8 @@ namespace Dune {
          */
         void setMeasurementList(const std::shared_ptr<const MeasurementList>& list)
         {
+          std::shared_ptr<SubMeasurements> groundwater_Measurement(new SubMeasurements());
+          (*groundwater_Measurement).setTimes(1.00,2.44);          
           // this is a way of interacting with the measurementlist, however it does not help yet...
           //auto mysub = (*list).get("anything"); 
           //(*mysub).extract(*forwardStorage,10,20);
@@ -281,7 +284,7 @@ namespace Dune {
           // store complete space-time solution
           // alternative: only store last two steps
           template<typename... T>
-            using StorageContainer = FullContainer<T...>;
+            using StorageContainer = LastTwoContainer<T...>;
 
           // use next timestep when interpolating stored solution
           // alternatives: PreviousTimestep and LinearInterpolation
