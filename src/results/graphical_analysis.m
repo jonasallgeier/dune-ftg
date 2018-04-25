@@ -24,7 +24,7 @@ function varargout = graphical_analysis(varargin)
 
 % Copyright 2001-2003 The MathWorks, Inc.
 
-% Last Modified by GUIDE v2.5 25-Apr-2018 13:13:35
+% Last Modified by GUIDE v2.5 25-Apr-2018 16:25:39
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -325,39 +325,44 @@ end
 
 
 function update_figure(handles)
-    A = str2double(get(handles.A_electrode,'String'));
-    M = str2double(get(handles.M_electrode,'String'));
-    N = str2double(get(handles.N_electrode,'String'));
-    B = str2double(get(handles.B_electrode,'String'));
-    axes(handles.axes1);
-    handles.current_ts=diff(handles.data3d(A,[M N],:)-handles.data3d(B,[M N],:));
-    plot(1:size(handles.current_ts,3),reshape(handles.current_ts,[1,size(handles.current_ts,3)]),'kx');
-    xlim([0 size(handles.current_ts,3)]);
-    grid on;
-    ylabel('R');
-    xlabel('t');
-    axes(handles.axes5);
-    hold off
-    X = handles.X_elec;
-    Y = handles.Y_elec;
-    Z = handles.Z_elec;
-    scatter3(X,Y,Z);
-    hold on
-    X = handles.X_elec([A]);
-    Y = handles.Y_elec([A]);
-    Z = handles.Z_elec([A]);
-    scatter3(X,Y,Z,'r*');
-    X = handles.X_elec([B]);
-    Y = handles.Y_elec([B]);
-    Z = handles.Z_elec([B]);
-    scatter3(X,Y,Z,'k*');
-    X = handles.X_elec([M,N]);
-    Y = handles.Y_elec([M,N]);
-    Z = handles.Z_elec([M,N]);
-    scatter3(X,Y,Z,'b*');
-    xlabel('x');
-    ylabel('y');
-    view([-16 72])
+A = str2double(get(handles.A_electrode,'String'));
+M = str2double(get(handles.M_electrode,'String'));
+N = str2double(get(handles.N_electrode,'String'));
+B = str2double(get(handles.B_electrode,'String'));
+axes(handles.axes1);
+handles.current_ts=diff(handles.data3d(A,[M N],:)-handles.data3d(B,[M N],:));
+plot(1:size(handles.current_ts,3),reshape(handles.current_ts,[1,size(handles.current_ts,3)]),'k.');
+xlim([0 size(handles.current_ts,3)]);
+grid on;
+ylabel('R');
+xlabel('t');
+axes(handles.axes5);
+hold off
+X = handles.X_elec;
+Y = handles.Y_elec;
+Z = handles.Z_elec;
+scatter3(X,Y,Z,'o','MarkerEdgeColor',[0.4 0.4 0.4]);
+grid minor
+hold on
+X = handles.X_elec([A]);
+Y = handles.Y_elec([A]);
+Z = handles.Z_elec([A]);
+scatter3(X,Y,Z,'ko','filled','MarkerEdgeColor',[0 0 0]);
+X = handles.X_elec([B]);
+Y = handles.Y_elec([B]);
+Z = handles.Z_elec([B]);
+scatter3(X,Y,Z,'ro','filled','MarkerEdgeColor',[0 0 0]);
+X = handles.X_elec([M]);
+Y = handles.Y_elec([M]);
+Z = handles.Z_elec([M]);
+scatter3(X,Y,Z,'o','filled','MarkerFaceColor',[0 .9 .0],'MarkerEdgeColor',[0 0 0]);
+X = handles.X_elec([N]);
+Y = handles.Y_elec([N]);
+Z = handles.Z_elec([N]);
+scatter3(X,Y,Z,'o','filled','MarkerFaceColor',[0 .75 .9],'MarkerEdgeColor',[0 0 0]);
+xlabel('x');
+ylabel('y');
+view([-16 72])
 end
 
 
@@ -474,4 +479,74 @@ function conf_number_KeyReleaseFcn(hObject, eventdata, handles)
 %	Character: character interpretation of the key(s) that was pressed
 %	Modifier: name(s) of the modifier key(s) (i.e., control, shift) pressed
 % handles    structure with handles and user data (see GUIDATA)
+end
+
+
+% --- Executes on button press in set_A_electrode.
+function set_A_electrode_Callback(hObject, eventdata, handles)
+% hObject    handle to set_A_electrode (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+try
+    axes(handles.axes5);
+    dcm_obj = datacursormode(gcf);
+    info_struct = getCursorInfo(dcm_obj);
+    test_coord = info_struct.Position;
+    
+    index = find(handles.X_elec==test_coord(1) & handles.Y_elec==test_coord(2) & handles.Z_elec==test_coord(3));
+    set(handles.A_electrode,'String',num2str(index));
+end
+
+update_figure(handles);
+set(handles.conf_number,'String','manual')
+end
+
+
+% --- Executes on button press in set_M_electrode.
+function set_M_electrode_Callback(hObject, eventdata, handles)
+% hObject    handle to set_M_electrode (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+try
+    axes(handles.axes5);
+    dcm_obj = datacursormode(gcf);
+    info_struct = getCursorInfo(dcm_obj);
+    test_coord = info_struct.Position;
+    index = find(handles.X_elec==test_coord(1) & handles.Y_elec==test_coord(2) & handles.Z_elec==test_coord(3));
+    set(handles.M_electrode,'String',num2str(index));
+end
+update_figure(handles);
+set(handles.conf_number,'String','manual')
+end
+% --- Executes on button press in set_N_electrode.
+function set_N_electrode_Callback(hObject, eventdata, handles)
+% hObject    handle to set_N_electrode (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+try
+    axes(handles.axes5);
+    dcm_obj = datacursormode(gcf);
+    info_struct = getCursorInfo(dcm_obj);
+    test_coord = info_struct.Position;
+    index = find(handles.X_elec==test_coord(1) & handles.Y_elec==test_coord(2) & handles.Z_elec==test_coord(3));
+    set(handles.N_electrode,'String',num2str(index));
+end
+update_figure(handles);
+set(handles.conf_number,'String','manual')
+end
+% --- Executes on button press in set_B_electrode.
+function set_B_electrode_Callback(hObject, eventdata, handles)
+% hObject    handle to set_B_electrode (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+try
+    axes(handles.axes5);
+    dcm_obj = datacursormode(gcf);
+    info_struct = getCursorInfo(dcm_obj);
+    test_coord = info_struct.Position;
+    index = find(handles.X_elec==test_coord(1) & handles.Y_elec==test_coord(2) & handles.Z_elec==test_coord(3));
+    set(handles.B_electrode,'String',num2str(index));
+end
+update_figure(handles);
+set(handles.conf_number,'String','manual')
 end
