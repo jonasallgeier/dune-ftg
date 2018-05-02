@@ -1,0 +1,7 @@
+[ grid ]
+extensions = "100.00 70.00 20.00"
+cells = "100 70 20"
+
+[ randomField ]
+types = "conductivity storativity porosity sigma_bg kappa"
+

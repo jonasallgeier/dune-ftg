@@ -152,6 +152,7 @@ namespace Dune {
         template<typename Element, typename Domain, typename Time>
           RF cond (const Element& elem, const Domain& x, const Time& time) const
           {
+            
             if (!kappaField || !sigma_bgField)
             {
               std::cout << "ModelParameters::cond " << this->name() << " " << this << std::endl;
@@ -165,7 +166,8 @@ namespace Dune {
             (*sigma_bgField).evaluate(elem,x,sigma_bg);           
 
             //transform concentration to an electric conductivity
-            return (*transportParams).concentration(elem,x,time)*kappa[0]+sigma_bg[0];
+            return (*transportParams).concentration(elem,x,time)*kappa[0]+sigma_bg[0]; 
+            //return (*transportParams).concentration(elem,x,time)*0.06+0.3;
           }
 
         /**

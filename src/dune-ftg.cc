@@ -22,6 +22,11 @@
 #include<dune/ftg/transport.hh>
 #include<dune/ftg/geoelectrics.hh>
 #include<dune/ftg/ftg.hh>
+#include<dune/pdelab/function/callableadapter.hh>
+//#include<dune/pdelab/finiteelementmap/pkfem.hh>
+//#include<dune/pdelab/constraints/common/constraints.hh>
+//#include<dune/pdelab/constraints/common/constraintsparameters.hh>
+//#include<dune/pdelab/constraints/conforming.hh>
 
 using namespace Dune::Modelling;
 
@@ -87,11 +92,92 @@ void transientTransport(int argc, char** argv)
     std::cout << "Total time elapsed: " << totalTimer.elapsed() << std::endl;
 }
 
+
+void printParameters(int argc, char** argv)
+{
+  Dune::MPIHelper& helper = Dune::MPIHelper::instance(argc, argv);
+
+  // read in configuration from .ini file
+  Dune::ParameterTree config;
+  Dune::ParameterTreeParser parser;
+  parser.readINITree("modelling.ini",config);
+   
+  // use double for coordinates and values, dim = 3;
+  using Traits = ModelTraits<double,double,3>;
+  using GridTraits = typename Traits::GridTraits;
+  using GV    = typename GridTraits::Grid::LeafGridView;
+  using DomainField = typename GridTraits::DomainField;
+  using RangeField  = typename GridTraits::RangeField;
+  using ParameterList   = Traits::ParameterList;
+  using ParameterField  = typename ParameterList::SubRandomField;
+
+  Traits   modelTraits(helper,config);  //this will also read in the electrode configuration file
+  std::shared_ptr<ParameterList>  parameterList  (new ParameterList(config.template get<std::string>("fields.location")));
+  std::shared_ptr<ParameterField> conductivityField;
+  conductivityField = (*parameterList).get(argv[2]);
+
+  const GV gv = modelTraits.grid().leafGridView();
+
+// do parameter stuff here; instead of this lambda function...
+  auto glambda = [&](const Traits::GridTraits::Domain& x)
+  {
+    Traits::GridTraits::Scalar s;
+    (*conductivityField).evaluate(x,s);
+    return s;
+  };
+  auto g = Dune::PDELab::makeGridFunctionFromCallable(gv,glambda);
+
+
+
+  enum {dim = GridTraits::dim};
+
+  using FEM = Dune::PDELab::P0LocalFiniteElementMap<DomainField,RangeField,dim>;
+  using VBE = Dune::PDELab::istl::VectorBackend<Dune::PDELab::istl::Blocking::fixed,1>;
+  using CON = Dune::PDELab::P0ParallelConstraints;
+
+  FEM fem(Dune::GeometryType(Dune::GeometryType::cube,dim));
+
+  //using GridFunctionSpace = Dune::PDELab::GridFunctionSpace<GridView,FEM,CON,VBE>;
+  //using GridVector        = typename Dune::PDELab::Backend::Vector<GridFunctionSpace,RangeField>;
+
+  //using ScalarDGF    = PDELab::DiscreteGridFunction<GridFunctionSpace,GridVector>;
+
+  //using FEM = Dune::PDELab::PkLocalFiniteElementMap<GV,DomainField,RangeField,1>;  
+  //using CON = Dune::PDELab::ConformingDirichletConstraints;
+  //using VBE = Dune::PDELab::istl::VectorBackend<>;
+  typedef Dune::PDELab::GridFunctionSpace<GV,FEM,CON,VBE> GFS;
+
+
+  using Z = Dune::PDELab::Backend::Vector<GFS,RangeField>; // A coefficient vector
+  typedef Dune::PDELab::DiscreteGridFunction<GFS,Z> ZDGF; // Make a grid function out of it
+
+  GFS gfs(gv,fem);
+  gfs.name(argv[2]);
+  Z z(gfs); // initial value
+  ZDGF zdgf(gfs,z);
+  Dune::PDELab::interpolate(g,gfs,z); // Fill the coefficient vector
+
+
+  Dune::SubsamplingVTKWriter<GV> vtkwriter(gv,1);
+  typedef Dune::PDELab::VTKGridFunctionAdapter<ZDGF> VTKF;
+  vtkwriter.addVertexData(std::shared_ptr<VTKF>(new VTKF(zdgf,"data")));
+  vtkwriter.pwrite(argv[2],"vtk","", Dune::VTK::appendedraw);
+}
+
+
 int main(int argc, char** argv)
 {
   try
   {
-    transientTransport(argc,argv); // try to run the problem
+    if (argc==1)
+      transientTransport(argc,argv); // try to run the problem
+    else if (std::string(argv[1]) == "print")
+      printParameters(argc,argv);
+    else
+      std::cout << "Possible options: \n"
+      << "      (no option) -> run dune-ftg model\n"
+      << "      print [field] -> print parameter field as VTK\n"
+      << std::endl;
     return 0;
   }
   catch (Dune::Exception &e)
