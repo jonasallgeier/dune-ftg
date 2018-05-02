@@ -113,6 +113,7 @@ namespace Dune {
         template<typename Element, typename Domain, typename Time>
           RF cond(const Element& elem, const Domain& x, const Time& t) const
           {
+            
             if (!conductivityField)
             {
               std::cout << "ModelParameters::cond " << this->name() << " " << this << std::endl;
@@ -133,6 +134,9 @@ namespace Dune {
               typename Traits::GridTraits::Scalar value;
               (*conductivityField).evaluate(elem,x,value);
               return value[0];
+          
+            //double tmp_const = 0.001;
+            //return tmp_const;
           }
 
         /**
@@ -150,6 +154,9 @@ namespace Dune {
             typename Traits::GridTraits::Scalar value;
             (*storativityField).evaluate(elem,x,value);
             return value[0];
+            
+            //double tmp_const = 0.0;
+            //return tmp_const;
           }
 
         /**

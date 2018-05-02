@@ -1,25 +1,50 @@
-if (sum(sum(subfields.ztop == cell_tops')) ~= subfields.number)
-    number_false_ztops = subfields.number-sum(sum(subfields.ztop == cell_tops'));
-    switch number_false_ztops>1
-        case 1
-            error(strcat('There are',32,num2str(number_false_ztops),' upper layer boundaries not aligning with the cells! Please check input.'));
-        case 0
-            error(strcat('There is an upper layer boundary not aligning with the cells! Please check input.'));
+function [] = field_generation_routine(name,cm)
+load(strcat(cm.input,'/',name),'subfields');
+
+if ~cm.isequidistant
+    delta_x = min(diff(cm.vector_x));
+    delta_y = min(diff(cm.vector_y));
+    delta_z = min(diff(cm.vector_z));
+    
+    x_fine = min(cm.vector_x):delta_x:max(cm.vector_x);
+    y_fine = min(cm.vector_y):delta_y:max(cm.vector_y);
+    z_fine = min(cm.vector_z):delta_z:max(cm.vector_z);
+    
+    if max(x_fine) ~= max(cm.vector_x) || max(y_fine) ~= max(cm.vector_y) || max(z_fine) ~= max(cm.vector_z)
+        warning(['At least one extent is not an integer multiple of the smalles mesh size in the respective' ...
+            ' direction. The field will still be generated, but inaccuracies are possible.']);
+        
+    end
+    
+    cm.cell_tops = z_fine(2:end);
+    %subfields.finecells = NaN(size(subfields.ztop));
+    %subfields.finecells(1) = find(cell_tops>=subfields.ztop(1),1);
+    %for i = 2:subfields.number
+    %    subfields.finecells(i) = find(cell_tops>=subfields.ztop(i),1)-sum(subfields.finecells(1:i-1));
+    %end
+    
+    subfields.cells_in_layer = NaN(size(subfields.ztop,2),length(cm.vector_z(2:end)));
+    subfields.cells_in_layer(1,:) = (cm.vector_z(2:end)<=subfields.ztop(1))';
+    for i = 2:subfields.number
+        subfields.cells_in_layer(i,:) = (cm.vector_z(2:end)<=subfields.ztop(i) & cm.vector_z(2:end)>subfields.ztop(i-1))';
     end
 end
 
 subfields.cells = NaN(size(subfields.ztop));
-subfields.cells(1) = find(cell_tops>=subfields.ztop(1),1);
+subfields.cells(1) = find(cm.cell_tops>=subfields.ztop(1),1);
 for i = 2:subfields.number
-    subfields.cells(i) = find(cell_tops>=subfields.ztop(i),1)-sum(subfields.cells(1:i-1));
+    subfields.cells(i) = find(cm.cell_tops>=subfields.ztop(i),1)-sum(subfields.cells(1:i-1));
 end
 
 subfields.height = NaN(size(subfields.ztop));
 for i = 2:subfields.number
     subfields.height(i) = subfields.ztop(i)-subfields.ztop(i-1);
 end
-subfields.height(1) = subfields.ztop(1);
-
+if cm.isequidistant
+    subfields.height(1) = subfields.zop(1);
+else
+    subfields.height(1) = subfields.ztop(1)-min(cm.vector_z);   
+end
 
 
 
@@ -30,22 +55,15 @@ for i = 1:subfields.number
     fileID = fopen(filename,'w');
     %fileID = fopen('grid.ini','w');
     
-    % print grid properties TODO: print only the needed part
+    % print grid properties
     fprintf(fileID,'%s\n','[ grid ]');
-    fprintf(fileID,'%s "%.2f %.2f %.2f"\n','extensions =',[extents(1:2),subfields.height(i)]);
-    fprintf(fileID,'%s "%d %d %d"\n','cells =',[cells(1:2),subfields.cells(i)]);
+    fprintf(fileID,'%s "%g %g %g"\n','extensions =',[cm.extents(1:2),subfields.height(i)]);
+    if cm.isequidistant
+        fprintf(fileID,'%s "%d %d %d"\n','cells =',[cm.cells(1:2),subfields.cells(i)]);
+    else
+        fprintf(fileID,'%s "%d %d %d"\n','cells =',[length(x_fine)-1,length(y_fine)-1,subfields.cells(i)]);
+    end
     fprintf(fileID,'\n');
-    
-    % print field names
-    %fprintf(fileID,'%s\n','[ randomField ]');
-    %thestring = strcat(name,'1');
-    %for i = 2:subfields.number
-    %    thestring = strcat(thestring," ",name,num2str(i));
-    %end
-    %fprintf(fileID,'%s "%s"\n','types =',thestring);
-    %fprintf(fileID,'\n');
-    
-    %fclose(fileID);
     
     % print transformation type
     fprintf(fileID,'%s\n','[ randomField ]');
@@ -70,25 +88,118 @@ for i = 1:subfields.number
     % system -> to make the following system command work you have to set the
     % environment variable LD_PRELOAD before starting matlab:
     % alias matlab='LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.21 /usr/local/bin/matlab -desktop'
-    
-    command = strcat(fieldgenerator_location,' ./',filename,' -output.dune ',outputfolder,filebasename);
-    [status,cmdout] = system(command,'-echo');
+    if isempty(cm.seed)
+        command = strcat(cm.fieldgenerator_location,' ./',filename,' -input.seed 2 -output.dune ',cm.outputfolder,filebasename);
+    else
+        command = strcat(cm.fieldgenerator_location,' ./',filename,' -input.seed ',32,num2str(cm.seed),' -output.dune ',cm.outputfolder,filebasename);
+    end
+    [~,~] = system(command,'-echo');
 end
 
 % create empty data container of size XxYxZ
-field_data = NaN(cells);
+field_data = NaN(cm.cells);
 for i = 1:subfields.number
     filebasename = strcat(name,num2str(i));
     filename = strcat(filebasename,'.stoch.h5');
     data = h5read(filename,'/stochastic');
     data = data + subfields.mean(i);
-    if i == 1
-        field_data(1:cells(1),1:cells(2),1:subfields.cells(i)) = data;
-    else
-        temp = cumsum(subfields.cells);
-        field_data(1:cells(1),1:cells(2),1+temp(i-1):temp(i)) = data;
-    end
     
+    if cm.isequidistant
+        if i == 1
+            field_data(1:cm.cells(1),1:cm.cells(2),1:subfields.cells(i)) = data;
+        else
+            temp = cumsum(subfields.cells);
+            field_data(1:cm.cells(1),1:cm.cells(2),1+temp(i-1):temp(i)) = data;
+        end
+    else
+        temp = cumsum(subfields.height);
+        %z_layermax = temp(i);
+        
+        if i== 1
+            z_layermin = min(cm.vector_z);
+        else
+            z_layermin = temp(i-1)+min(cm.vector_z);
+        end
+        
+        
+        %mid point of cell
+        %x_cell_midpoints = 0.5*delta_x+min(x_fine):delta_x:max(x_fine)-0.5*delta_x;
+        %y_cell_midpoints = 0.5*delta_y+min(y_fine):delta_y:max(y_fine)-0.5*delta_y;
+        z_cell_midpoints = 0.5*delta_z+min(z_fine):delta_z:max(z_fine)-0.5*delta_z;
+        %left & right boundary of cell
+        x_bl = x_fine(1:end-1);
+        x_br = x_fine(2:end);
+        y_bl = y_fine(1:end-1);
+        y_br = y_fine(2:end);
+        z_bl = z_fine(1:end-1);
+        z_br = z_fine(2:end);
+        
+        for i_x = 1:cm.cells(1)
+            x_max = cm.vector_x(i_x+1);
+            x_min = cm.vector_x(i_x);
+            for i_y = 1:cm.cells(2)
+                y_max = cm.vector_y(i_y+1);
+                y_min = cm.vector_y(i_y);
+                for i_z = 1:sum(subfields.cells_in_layer(i,:))
+                    temp = find(subfields.cells_in_layer(i,:));
+                    current_cell = temp(i_z);
+                    
+                    z_max = cm.vector_z(current_cell+1);
+                    z_min = cm.vector_z(current_cell);
+                    
+                    
+                    
+                    %log = x_min<x_br & x_max>x_bl;
+                    temp_1 = (x_br-x_min)/delta_x;
+                    temp_1(temp_1>1) = 1;
+                    temp_1(temp_1<0) = 0;
+                    
+                    temp_2 = (x_max-x_bl)/delta_x;
+                    temp_2(temp_2>1) = 1;
+                    temp_2(temp_2<0) = 0;
+                    weights_x = temp_1.*temp_2;
+                    
+                    temp_1 = (y_br-y_min)/delta_y;
+                    temp_1(temp_1>1) = 1;
+                    temp_1(temp_1<0) = 0;
+                    
+                    temp_2 = (y_max-y_bl)/delta_y;
+                    temp_2(temp_2>1) = 1;
+                    temp_2(temp_2<0) = 0;
+                    weights_y = temp_1.*temp_2;
+                    
+                    temp_1 = (z_br-z_min)/delta_z;
+                    temp_1(temp_1>1) = 1;
+                    temp_1(temp_1<0) = 0;
+                    
+                    temp_2 = (z_max-z_bl)/delta_z;
+                    temp_2(temp_2>1) = 1;
+                    temp_2(temp_2<0) = 0;
+                    weights_z = temp_1.*temp_2;
+                    
+                    weights_x = repmat(weights_x',[1,size(data,2),length(z_cell_midpoints)]);
+                    weights_y = repmat(weights_y,[size(data,1),1,length(z_cell_midpoints)]);
+                    weights_z = reshape(weights_z,[1,1,length(z_cell_midpoints)]);
+                    weights_z = repmat(weights_z,[size(data,1),size(data,2),1]);
+                    
+                    weights = weights_x.*weights_y.*weights_z;
+                    weights = weights(:,:,find(z_fine(2:end)>z_layermin,1):end);
+                    %sel_x = x_cell_midpoints(weights_x>0);
+                    %sel_y = y_cell_midpoints(weights_y>0);
+                    
+                    %sel_x = (x_fine(2:end)<=x_max & x_fine(2:end)>x_min);
+                    %sel_y = (y_fine(2:end)<=y_max & y_fine(2:end)>y_min);
+                    %sel_z = (z_fine(2:end)<=z_max & z_fine(2:end)>z_min);
+                    
+                    %sel_z = sel_z(find(z_fine(2:end)>z_layermin,1):end);
+                    
+                    selection = data(weights>0);
+                    weights = weights(weights>0);
+                    field_data(i_x,i_y,current_cell) = harm(selection,weights);
+                end
+            end
+        end
+    end
     delete(strcat(filebasename,'.stoch.h5'))
     delete(strcat(filebasename,'.trend'))
     delete(strcat(filebasename,'.xdmf'))
@@ -97,18 +208,30 @@ end
 
 
 
-outputfilename = strcat(outputfolder(2:end),outputtrunk,'.',name,'.stoch.h5');
-h5create(outputfilename,'/stochastic',cells);
+outputfilename = strcat(cm.outputfolder(2:end),cm.outputtrunk,'.',name,'.stoch.h5');
+if exist(outputfilename, 'file') == 2
+    delete(outputfilename)
+end
+h5create(outputfilename,'/stochastic',cm.cells);
 h5write(outputfilename,'/stochastic',field_data);
 
-outputfilename = strcat(outputfolder(2:end),outputtrunk,'.',name,'.field');
+outputfilename = strcat(cm.outputfolder(2:end),cm.outputtrunk,'.',name,'.field');
 fileID = fopen(outputfilename,'w');
 %fileID = fopen('grid.ini','w');
 
 % print grid properties
 fprintf(fileID,'%s\n','[ grid ]');
-fprintf(fileID,'%s "%.2f %.2f %.2f"\n','extensions =',extents);
-fprintf(fileID,'%s "%d %d %d"\n','cells =',cells);
+fprintf(fileID,'%s "%.2f %.2f %.2f"\n','extensions =',cm.extents);
+fprintf(fileID,'%s "%d %d %d"\n','cells =',cm.cells);
+fprintf(fileID,'%s "','vector_x =');
+fprintf(fileID,'%g ',cm.vector_x);
+fprintf(fileID,'" \n');
+fprintf(fileID,'%s "','vector_y =');
+fprintf(fileID,'%g ',cm.vector_y);
+fprintf(fileID,'" \n');
+fprintf(fileID,'%s "','vector_z =');
+fprintf(fileID,'%g ',cm.vector_z);
+fprintf(fileID,'" \n');
 fprintf(fileID,'\n');
 
 % print transformation type
@@ -123,11 +246,29 @@ fprintf(fileID,'%s\n','covariance = "exponential"');
 fprintf(fileID,'\n');
 fclose(fileID);
 
-outputfilename = strcat(outputfolder(2:end),outputtrunk,'.',name,'.trend');
+outputfilename = strcat(cm.outputfolder(2:end),cm.outputtrunk,'.',name,'.trend');
 fileID = fopen(outputfilename,'w');
 fprintf(fileID,'%s %.2f\n','mean = 0');
 fclose(fileID);
 
-if vtk_out == true
-    vtkwrite(strcat('./',name,'.vtk'), 'structured_points', 'Conductivity', field_data, 'spacing', 2, 2, 2)
+if cm.vtk_out == true
+    if cm.isequidistant
+        vtkwrite(strcat('./',name,'.vtk'), 'structured_points', 'Conductivity', field_data)
+    else
+        X = NaN(size(field_data));
+        Y = NaN(size(field_data));
+        Z = NaN(size(field_data));
+        for i_x = 1:size(field_data,1)
+            for i_y = 1:size(field_data,2)
+                for i_z = 1:size(field_data,3)
+                    X(i_x,i_y,i_z) = 0.5*cm.vector_x(i_x)+0.5*cm.vector_x(i_x+1);
+                    Y(i_x,i_y,i_z) = 0.5*cm.vector_y(i_y)+0.5*cm.vector_y(i_y+1);
+                    Z(i_x,i_y,i_z) = 0.5*cm.vector_z(i_z)+0.5*cm.vector_z(i_z+1);
+                end
+            end
+        end
+        %vtkwrite(strcat('./',name,'.vtk'), 'structured_points', 'data', field_data, 'spacing', 2, 2, 2)
+        vtkwrite(strcat('./',name,'.vtk'), 'structured_grid',X,Y,Z,'scalars','data', field_data)
+    end
+end
 end

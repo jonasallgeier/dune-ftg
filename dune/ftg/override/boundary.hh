@@ -27,7 +27,9 @@ namespace Dune {
 
         enum {dim = GridTraits::dim};
 
-        const std::vector<RF> extensions;
+        //const std::vector<RF> extensions;
+        const std::vector<RF> corner_ll;
+        const std::vector<RF> corner_ur;
         const RF eps;
 
         /**
@@ -145,7 +147,7 @@ namespace Dune {
         public:
 
         Boundary(const Traits& traits, const std::string& name)
-          : extensions(traits.config().template get<std::vector<RF> >("grid.extensions")),
+          : corner_ll(traits.corners_ll()), corner_ur(traits.corners_ur()),
           eps(1e-5), storedTime(std::numeric_limits<RF>::max())
         {
           Dune::ParameterTree boundaryConfig;
@@ -305,21 +307,21 @@ namespace Dune {
         void findSegment(const Domain& global, unsigned int& sideId, unsigned int& segmentId) const
         {
           // left boundary
-          if (global[0] < eps)
+          if (global[0] < eps+corner_ll[0])
             sideId = 0;
           // right boundary
-          else if (global[0] > extensions[0] - eps)
+          else if (global[0] > corner_ur[0] - eps)
             sideId = 1;
           else if (dim == 3)
           {
             // front boundary
-            if (global[1] < eps)
+            if (global[1] < eps+corner_ll[1])
               sideId = 2;
             // back boundary
-            else if (global[1] > extensions[1] - eps)
+            else if (global[1] > corner_ur[1] - eps)
               sideId = 3;
             // bottom boundary
-            else if (global[2] < eps)
+            else if (global[2] < eps+corner_ll[2])
               sideId = 4;
             // top boundary
             else
@@ -328,7 +330,7 @@ namespace Dune {
           else
           {
             // bottom boundary
-            if (global[1] < eps)
+            if (global[1] < eps+corner_ll[1])
               sideId = 2;
             // top boundary
             else

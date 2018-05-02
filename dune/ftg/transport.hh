@@ -115,7 +115,9 @@ namespace Dune {
 
             typename Traits::GridTraits::Scalar output;
             (*porosityField).evaluate(x,output);
-            return output[0];
+            return output[0]; 
+            //double tmp_const = 0.25;
+            //return tmp_const;
           }
 	
 	      /**

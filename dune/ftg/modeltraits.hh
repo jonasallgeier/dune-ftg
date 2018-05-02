@@ -5,7 +5,8 @@
 #define DUNE_MODELLING_EXAMPLE_HH
 
 #include<dune/grid/yaspgrid.hh>
-#include<dune/randomfield/randomfield.hh>
+// use slightly modified version of dune/randomfield.hh
+#include<dune/ftg/override/randomfield.hh>
 
 /**
  * @brief Helper class for grid generation
@@ -19,39 +20,66 @@ class GridHelper
   typedef typename GT::RangeField RF;
 
   int levels;
-  std::vector<DF> maxExt;
-  std::vector<DF> lowerleft, upperright;
   std::vector<unsigned int> minCells, maxCells;
+  std::array<std::vector<DF>,dim> coordinate_vectors;
 
   public:
 
+  //std::vector<DF> maxExt;
+  bool isequidistant;
+  std::vector<DF> lowerleft, upperright;
+
   GridHelper(const Dune::ParameterTree& config)
   {
-    levels      = config.get<int>                       ("grid.levels"    ,1);
-    maxExt      = config.get<std::vector<DF> >          ("grid.extensions");    
-    lowerleft   = config.get<std::vector<DF> >          ("grid.lowerleft");   // get coordinates of lower left point
-    upperright  = config.get<std::vector<DF> >          ("grid.upperright"); // get coordinates of upper right point
-    
-    maxExt = std::vector<DF>(3);
-    for (int i=0; i <3; i++)
+    isequidistant = config.get<bool>              ("grid.equidistant",1);
+    levels      = config.get<int>                 ("grid.levels"    ,1);
+    //maxExt      = config.get<std::vector<DF> >    ("grid.extensions");
+    if (isequidistant)       
     {
-      maxExt[i] = upperright[i]-lowerleft[i];
-    }    
-    
-    maxCells = config.get<std::vector<unsigned int> >("grid.cells");
+      lowerleft   = config.get<std::vector<DF> >  ("grid.lowerleft");   // get coordinates of lower left point
+      upperright  = config.get<std::vector<DF> >  ("grid.upperright");  // get coordinates of upper right point
+      //maxExt = std::vector<DF>(3);
+      //for (int i=0; i <3; i++)
+      //{
+      //  maxExt[i] = upperright[i]-lowerleft[i];
+      //}
+      maxCells = config.get<std::vector<unsigned int> >("grid.cells");
 
-    if (maxExt.size() != maxCells.size())
-      DUNE_THROW(Dune::Exception,"cell and extension vectors differ in size");
+      //if (maxExt.size() != maxCells.size())
+      //  DUNE_THROW(Dune::Exception,"cell and extension vectors differ in size");    
 
-    minCells = maxCells;
-    for (int i = 0; i < levels - 1; i++)
-      for (unsigned int j = 0; j < maxCells.size(); j++)
+      minCells = maxCells;
+      for (int i = 0; i < levels - 1; i++)
+        for (unsigned int j = 0; j < maxCells.size(); j++)
+        {
+          if (minCells[j]%2 != 0)
+            DUNE_THROW(Dune::Exception,"cannot create enough levels for hierarchical grid, check number of cells");
+
+          minCells[j] /= 2;
+        }
+    } else {
+      for (unsigned int i = 0; i < dim; i++)
       {
-        if (minCells[j]%2 != 0)
-          DUNE_THROW(Dune::Exception,"cannot create enough levels for hierarchical grid, check number of cells");
-
-        minCells[j] /= 2;
+        std::vector<DF> vec_i;
+        if (i==0)
+          vec_i = config.get<std::vector<DF> >    ("grid.vector_x");
+        else if (i==1)
+          vec_i = config.get<std::vector<DF> >    ("grid.vector_y");
+        else if (i==2)
+          vec_i = config.get<std::vector<DF> >    ("grid.vector_z");
+        else
+          DUNE_THROW(Dune::Exception,"nonequidistant grid with more than four dimensions is not implemented");
+        lowerleft.push_back(vec_i[0]);
+        upperright.push_back(vec_i.back());
+        coordinate_vectors[i] = vec_i;
       }
+    }
+
+        
+    
+
+    
+
   }
 
   Dune::FieldVector<DF,dim> L() const
@@ -59,7 +87,7 @@ class GridHelper
     Dune::FieldVector<DF,dim> Lvector;
 
     for (unsigned int i = 0; i < dim; i++)
-      Lvector[i] = maxExt[i];
+      Lvector[i] = upperright[i]-lowerleft[i]; //TODO check if that works
 
     return Lvector;
   }
@@ -85,6 +113,31 @@ class GridHelper
       URvector[i] = upperright[i];
 
     return URvector;
+  }
+
+  std::array<std::vector<DF>,dim> coords() const
+  {
+    std::array<std::vector<DF>,dim> output;
+    if (isequidistant)
+    {
+      for (unsigned int i = 0; i < dim; i++)
+      {
+        DF delta = (upperright[i]-lowerleft[i])/minCells[i];
+        std::vector<DF> vec_i;
+        vec_i.reserve(minCells[i]);
+        DF pos = lowerleft[i];
+        for (unsigned int j = 0; j <= minCells[i]; j++)
+        {
+          vec_i.push_back(pos);
+          pos += delta;
+        }
+        output[i] = vec_i;
+      }
+    } else
+    {
+      output = coordinate_vectors;
+    }
+    return output;
   }
   
 
@@ -120,7 +173,7 @@ class ModelTraits
     {
       enum {dim = dimension};
 //      using Grid     = Dune::YaspGrid<dim>;
-      using Grid     = Dune::YaspGrid<dim,Dune::EquidistantOffsetCoordinates<DF, dim> >;
+      using Grid     = Dune::YaspGrid<dim,Dune::TensorProductCoordinates<DF, dim> >;
       using GridView = typename Grid::LevelGridView;
 
       using RangeField   = RF;
@@ -179,6 +232,7 @@ class ModelTraits
     const Dune::MPIHelper& helper;
     const Dune::ParameterTree& duneConfig;
     const GridHelper<GridTraits> gh;
+
     typename GridTraits::Grid yaspGrid;
       
 //    ModelTraits(Dune::MPIHelper& helper_, Dune::ParameterTree& duneConfig_)
@@ -188,11 +242,19 @@ class ModelTraits
 //    }
     ModelTraits(Dune::MPIHelper& helper_, Dune::ParameterTree& duneConfig_)
       : helper(helper_), duneConfig(duneConfig_), gh(duneConfig),
-      yaspGrid(gh.LL(),gh.UR(),gh.N(),gh.B(),1)
+      yaspGrid(gh.coords(),gh.B(),1)
     {
     }
 
+    const std::vector<DF> & corners_ll() const
+    {
+      return gh.lowerleft;
+    }
 
+    const std::vector<DF> & corners_ur() const
+    {
+      return gh.upperright;
+    }
 
     const typename GridTraits::Grid& grid() const
     {
