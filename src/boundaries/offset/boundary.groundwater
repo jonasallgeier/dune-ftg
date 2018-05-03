@@ -7,7 +7,7 @@ front   = 1
 back    = 1
 
 [top0]
-limits  = -50 -35 -50 35
+limits  = -50 -35 50 35
 time0   = 0 1 0
 
 [left0]

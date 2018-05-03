@@ -1,0 +1,32 @@
+[segments]
+top     = 1
+bottom  = 1
+left    = 1 
+right   = 1
+front   = 1
+back    = 1
+
+[top0]
+limits  = 0 0 100 70
+time0   = 0 1 0
+
+[left0]
+limits  = 0 0 70 20
+time0   = 0 0 3
+
+[right0]
+limits  = 0 0 70 20
+time0   = 0 0 0
+
+[bottom0]
+limits  = 0 0 100 70
+time0   = 0 1 0
+
+[front0]
+limits  = 0 0 20 100
+time0   = 0 1 0
+
+[back0]
+limits  = 0 0 20 100
+time0   = 0 1 0
+

@@ -23,15 +23,6 @@ namespace Dune {
       : public ModelParametersBase<Traits>
       {
         using RF = typename Traits::GridTraits::RangeField;
-        /*
-        //using GridTraits = typename Traits::GridTraits;
-        //using IndexSet = typename GridTraits::GridView::IndexSet;
-        //using GFS        = typename EquationTraits<Traits,ModelTypes::Geoelectrics,Direction::Forward>::GridFunctionSpace;
-        //using GridVector = typename EquationTraits<Traits,ModelTypes::Geoelectrics,Direction::Forward>::GridVector;
-        //using ScalarDGF    = PDELab::DiscreteGridFunction<GFS,GridVector>;
-        */
-
-
         using ParameterList   = typename Traits::ParameterList;
         using ParameterField  = typename ParameterList::SubRandomField;
         using MeasurementList = typename Traits::MeasurementList;
@@ -166,8 +157,7 @@ namespace Dune {
             (*sigma_bgField).evaluate(elem,x,sigma_bg);           
 
             //transform concentration to an electric conductivity
-            return (*transportParams).concentration(elem,x,time)*kappa[0]+sigma_bg[0]; 
-            //return (*transportParams).concentration(elem,x,time)*0.06+0.3;
+            return (*transportParams).concentration(elem,x,time)*kappa[0]+sigma_bg[0];
           }
 
         /**

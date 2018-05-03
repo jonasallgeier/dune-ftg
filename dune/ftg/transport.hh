@@ -115,9 +115,7 @@ namespace Dune {
 
             typename Traits::GridTraits::Scalar output;
             (*porosityField).evaluate(x,output);
-            return output[0]; 
-            //double tmp_const = 0.25;
-            //return tmp_const;
+            return output[0];
           }
 	
 	      /**
@@ -127,8 +125,6 @@ namespace Dune {
           RF concentration(const Element& elem, const Domain& x, const Time& time) const
           {
             typename Traits::GridTraits::Scalar localConcentration;
-            //const auto& global  = elem.geometry().global(x);
-            //const auto& xInside = elem.geometry().local(global);
             (*forwardStorage).value(time,elem,x,localConcentration);
             return localConcentration[0];
           }

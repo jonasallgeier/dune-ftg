@@ -5,7 +5,8 @@
 #include<dune/pdelab/constraints/common/constraints.hh>
 #include<dune/pdelab/gridfunctionspace/interpolate.hh>
 
-#include<dune/modelling/solutionstorage.hh>
+#include<dune/ftg/override/solutionstorage.hh>
+//#include<dune/modelling/solutionstorage.hh>
 
 namespace Dune {
   namespace Modelling {
@@ -279,8 +280,7 @@ namespace Dune {
 
             time += timestep;
 
-            (*storage).storeSolution(time,newSolution);
-
+            
             // store solution for time == startTime
             if (oldTime == startTime)
             {
@@ -289,6 +289,8 @@ namespace Dune {
               else
                 (*storage).storeSolution(oldTime,newSolution);
             }
+
+            (*storage).storeSolution(time,newSolution); // TODO this was changed! this is critical for lasttwocontainer! otherwise messed up second time step
 
             oldSolution = newSolution;
 

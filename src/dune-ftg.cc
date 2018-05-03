@@ -23,10 +23,6 @@
 #include<dune/ftg/geoelectrics.hh>
 #include<dune/ftg/ftg.hh>
 #include<dune/pdelab/function/callableadapter.hh>
-//#include<dune/pdelab/finiteelementmap/pkfem.hh>
-//#include<dune/pdelab/constraints/common/constraints.hh>
-//#include<dune/pdelab/constraints/common/constraintsparameters.hh>
-//#include<dune/pdelab/constraints/conforming.hh>
 
 using namespace Dune::Modelling;
 
@@ -118,7 +114,6 @@ void printParameters(int argc, char** argv)
 
   const GV gv = modelTraits.grid().leafGridView();
 
-// do parameter stuff here; instead of this lambda function...
   auto glambda = [&](const Traits::GridTraits::Domain& x)
   {
     Traits::GridTraits::Scalar s;
@@ -127,39 +122,24 @@ void printParameters(int argc, char** argv)
   };
   auto g = Dune::PDELab::makeGridFunctionFromCallable(gv,glambda);
 
-
-
   enum {dim = GridTraits::dim};
 
   using FEM = Dune::PDELab::P0LocalFiniteElementMap<DomainField,RangeField,dim>;
   using VBE = Dune::PDELab::istl::VectorBackend<Dune::PDELab::istl::Blocking::fixed,1>;
   using CON = Dune::PDELab::P0ParallelConstraints;
+  using GFS = Dune::PDELab::GridFunctionSpace<GV,FEM,CON,VBE>;
+  using Z = Dune::PDELab::Backend::Vector<GFS,RangeField>; // A coefficient vector
+  using ZDGF = Dune::PDELab::DiscreteGridFunction<GFS,Z>; // Make a grid function out of it
+  using VTKF =  Dune::PDELab::VTKGridFunctionAdapter<ZDGF>;
 
   FEM fem(Dune::GeometryType(Dune::GeometryType::cube,dim));
-
-  //using GridFunctionSpace = Dune::PDELab::GridFunctionSpace<GridView,FEM,CON,VBE>;
-  //using GridVector        = typename Dune::PDELab::Backend::Vector<GridFunctionSpace,RangeField>;
-
-  //using ScalarDGF    = PDELab::DiscreteGridFunction<GridFunctionSpace,GridVector>;
-
-  //using FEM = Dune::PDELab::PkLocalFiniteElementMap<GV,DomainField,RangeField,1>;  
-  //using CON = Dune::PDELab::ConformingDirichletConstraints;
-  //using VBE = Dune::PDELab::istl::VectorBackend<>;
-  typedef Dune::PDELab::GridFunctionSpace<GV,FEM,CON,VBE> GFS;
-
-
-  using Z = Dune::PDELab::Backend::Vector<GFS,RangeField>; // A coefficient vector
-  typedef Dune::PDELab::DiscreteGridFunction<GFS,Z> ZDGF; // Make a grid function out of it
-
   GFS gfs(gv,fem);
   gfs.name(argv[2]);
   Z z(gfs); // initial value
   ZDGF zdgf(gfs,z);
   Dune::PDELab::interpolate(g,gfs,z); // Fill the coefficient vector
 
-
   Dune::SubsamplingVTKWriter<GV> vtkwriter(gv,1);
-  typedef Dune::PDELab::VTKGridFunctionAdapter<ZDGF> VTKF;
   vtkwriter.addVertexData(std::shared_ptr<VTKF>(new VTKF(zdgf,"data")));
   vtkwriter.pwrite(argv[2],"vtk","", Dune::VTK::appendedraw);
 }

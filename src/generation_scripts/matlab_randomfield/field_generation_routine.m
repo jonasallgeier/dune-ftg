@@ -1,6 +1,9 @@
 function [] = field_generation_routine(name,cm)
 load(strcat(cm.input,'/',name),'subfields');
 
+warning('hard coded z shift of 20!');
+subfields.ztop = subfields.ztop+20;
+
 if ~cm.isequidistant
     delta_x = min(diff(cm.vector_x));
     delta_y = min(diff(cm.vector_y));
@@ -41,7 +44,7 @@ for i = 2:subfields.number
     subfields.height(i) = subfields.ztop(i)-subfields.ztop(i-1);
 end
 if cm.isequidistant
-    subfields.height(1) = subfields.zop(1);
+    subfields.height(1) = subfields.ztop(1);
 else
     subfields.height(1) = subfields.ztop(1)-min(cm.vector_z);   
 end

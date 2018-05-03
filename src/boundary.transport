@@ -1,7 +1,7 @@
 [segments]
 top     = 1
 bottom  = 1
-left    = 3
+left    = 1
 right   = 1
 front   = 1
 back    = 1
@@ -19,18 +19,7 @@ limits  = -35 -20 35 0
 time0   = 0 0 0
 
 [left0]
-limits  = -35 -20 -5 0
-time0   = 0 0 0
-
-[left1]
-limits  = -5 -20 5 0
-time0   =  5000 0 0.4
-time1   = 25000 0 0
-time2   = 30000 0 0.4
-time3   = 86400 0 0
-
-[left2]
-limits  = 5 -20 35 0
+limits  = -35 -20 35 0
 time0   = 0 0 0
 
 [front0]

@@ -7,7 +7,6 @@
 #include<dune/grid/yaspgrid.hh>
 // use slightly modified version of dune/randomfield.hh
 #include<dune/ftg/override/randomfield.hh>
-
 /**
  * @brief Helper class for grid generation
  */
@@ -33,22 +32,13 @@ class GridHelper
   {
     isequidistant = config.get<bool>              ("grid.equidistant",1);
     levels      = config.get<int>                 ("grid.levels"    ,1);
-    //maxExt      = config.get<std::vector<DF> >    ("grid.extensions");
     if (isequidistant)       
     {
       lowerleft   = config.get<std::vector<DF> >  ("grid.lowerleft");   // get coordinates of lower left point
       upperright  = config.get<std::vector<DF> >  ("grid.upperright");  // get coordinates of upper right point
-      //maxExt = std::vector<DF>(3);
-      //for (int i=0; i <3; i++)
-      //{
-      //  maxExt[i] = upperright[i]-lowerleft[i];
-      //}
       maxCells = config.get<std::vector<unsigned int> >("grid.cells");
-
-      //if (maxExt.size() != maxCells.size())
-      //  DUNE_THROW(Dune::Exception,"cell and extension vectors differ in size");    
-
       minCells = maxCells;
+
       for (int i = 0; i < levels - 1; i++)
         for (unsigned int j = 0; j < maxCells.size(); j++)
         {
@@ -74,25 +64,8 @@ class GridHelper
         coordinate_vectors[i] = vec_i;
       }
     }
-
-        
-    
-
-    
-
   }
 
-  Dune::FieldVector<DF,dim> L() const
-  {
-    Dune::FieldVector<DF,dim> Lvector;
-
-    for (unsigned int i = 0; i < dim; i++)
-      Lvector[i] = upperright[i]-lowerleft[i]; //TODO check if that works
-
-    return Lvector;
-  }
-  
-  
   //lower left point of grid
   Dune::FieldVector<DF,dim> LL() const
   {
@@ -172,10 +145,8 @@ class ModelTraits
     struct GridTraits
     {
       enum {dim = dimension};
-//      using Grid     = Dune::YaspGrid<dim>;
       using Grid     = Dune::YaspGrid<dim,Dune::TensorProductCoordinates<DF, dim> >;
       using GridView = typename Grid::LevelGridView;
-
       using RangeField   = RF;
       using Scalar       = Dune::FieldVector<RF,1>;
       using Vector       = Dune::FieldVector<RF,dim>;
@@ -222,7 +193,6 @@ class ModelTraits
       }
     };
 
-
     // dummy implementation
     struct SensitivityList
     {
@@ -237,12 +207,7 @@ class ModelTraits
     const GridHelper<GridTraits> gh;
 
     typename GridTraits::Grid yaspGrid;
-      
-//    ModelTraits(Dune::MPIHelper& helper_, Dune::ParameterTree& duneConfig_)
-//      : helper(helper_), duneConfig(duneConfig_), gh(duneConfig),
-//      yaspGrid(gh.L(),gh.N(),gh.B(),1)
-//    {
-//    }
+
     ModelTraits(Dune::MPIHelper& helper_, Dune::ParameterTree& duneConfig_)
       : helper(helper_), duneConfig(duneConfig_), gh(duneConfig),
       yaspGrid(gh.coords(),gh.B(),1)
