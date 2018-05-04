@@ -124,13 +124,16 @@ namespace Dune {
             }
 
               unsigned int current_index = index_set().index(elem);
-              auto temp = well_cells().find(current_index);
+              std::map<unsigned int,std::pair<RF,bool>> wellcells = well_cells(); //this step is necessary! direct usage of well_cells() leads to mismatch!
+              typename std::map<unsigned int,std::pair<RF,bool>>::iterator temp = wellcells.find(current_index);
 
-              if ( !(temp->first == well_cells().end()->first) ) 
+              if ( temp != wellcells.end() ) 
               {
-                // a well cell -> return very high conductivity to achieve "shortcut"
+                // a well cell -> return very high conductivity to achieve "shortcut" or very low conductivity to achieve "packer"
                 typename Traits::GridTraits::Scalar value;
                 value = 1.0;
+                if ( (temp->second).first == 0.0)
+                  value = 0;
                 return value[0];
               }
               // no well cell

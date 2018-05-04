@@ -4,14 +4,15 @@ home
 
 % directory information
 cm.outputfolder = ' ./'; % space in front is necessary!
-cm.outputtrunk = 'output/testing_e'; % all field files have this trunk in front of their name; it is not recommended to leave this empty
+cm.outputtrunk = 'output/testing_ne_negative'; % all field files have this trunk in front of their name; it is not recommended to leave this empty
 cm.input = './input'; % all field files have this trunk in front of their name; it is not recommended to leave this empty
 
 cm.fieldgenerator_location = '../../../../../release-build/dune-randomfield/src/fieldgenerator';
 cm.vtk_out = true;
 
-cm.isequidistant = true;
-cm.seed = 2;
+cm.isequidistant = false;
+cm.seed = 2; % this is a matlab rng seed, which will later deliver different pseudo random reproducible seeds for dune-randomfield
+rng(cm.seed);
 
 % definition of general properties of grid
 if cm.isequidistant

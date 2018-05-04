@@ -1,8 +1,8 @@
 function [] = field_generation_routine(name,cm)
 load(strcat(cm.input,'/',name),'subfields');
 
-warning('hard coded z shift of 20!');
-subfields.ztop = subfields.ztop+20;
+%warning('hard coded z shift of 20!');
+%subfields.ztop = subfields.ztop+20;
 
 if ~cm.isequidistant
     delta_x = min(diff(cm.vector_x));
@@ -94,7 +94,8 @@ for i = 1:subfields.number
     if isempty(cm.seed)
         command = strcat(cm.fieldgenerator_location,' ./',filename,' -input.seed 2 -output.dune ',cm.outputfolder,filebasename);
     else
-        command = strcat(cm.fieldgenerator_location,' ./',filename,' -input.seed ',32,num2str(cm.seed),' -output.dune ',cm.outputfolder,filebasename);
+        seed = floor(1e6*rand(1));
+        command = strcat(cm.fieldgenerator_location,' ./',filename,' -input.seed ',32,num2str(seed),' -output.dune ',cm.outputfolder,filebasename);
     end
     [~,~] = system(command,'-echo');
 end
@@ -198,7 +199,7 @@ for i = 1:subfields.number
                     
                     selection = data(weights>0);
                     weights = weights(weights>0);
-                    field_data(i_x,i_y,current_cell) = harm(selection,weights);
+                    field_data(i_x,i_y,current_cell) = weighted_mean(selection,weights);
                 end
             end
         end

@@ -148,9 +148,10 @@ namespace Dune {
         std::array<unsigned int,dim> localOffset;
         unsigned int                 localDomainSize;
 
-        std::vector<RF>               vector_x;
-        std::vector<RF>               vector_y;
-        std::vector<RF>               vector_z;
+        //std::set<RF>               set_x;
+        //std::set<RF>               set_y;
+        //std::set<RF>               set_z;
+        std::array<std::set<RF>,dim> gridCoords;
 
         // properties on extended domain
         std::array<unsigned int,dim> extendedCells;
@@ -178,11 +179,23 @@ namespace Dune {
           verbose        (config.get<bool>                         ("randomField.verbose",false)),
           cgIterations   (config.get<unsigned int>                 ("randomField.cgIterations",100)),
           embeddingFactor(config.get<unsigned int>                 ("randomField.embeddingFactor",2)),
-          cells          (config.get<std::array<unsigned int,dim> >("grid.cells")),
-          vector_x       (config.get<std::vector<RF> >("grid.vector_x")),
-          vector_y       (config.get<std::vector<RF> >("grid.vector_y")),
-          vector_z       (config.get<std::vector<RF> >("grid.vector_z"))
+          cells          (config.get<std::array<unsigned int,dim> >("grid.cells"))
         {
+
+          std::vector<RF> test1 = config.get<std::vector<RF> >("grid.vector_x");
+          std::vector<RF> test2 = config.get<std::vector<RF> >("grid.vector_y");
+          std::vector<RF> test3 = config.get<std::vector<RF> >("grid.vector_z");
+
+          std::set<RF> interm1(test1.begin(), test1.end());
+          std::set<RF> interm2(test2.begin(), test2.end());
+          std::set<RF> interm3(test3.begin(), test3.end());
+          gridCoords[0] = interm1;
+          gridCoords[1] = interm2;
+          gridCoords[2] = interm3;
+          //std::vector<RF> vector_y = config.get<std::vector<RF> >("grid.vector_y");
+          //std::vector<RF> vector_z = config.get<std::vector<RF> >("grid.vector_z");
+          
+
           MPI_Comm_rank(comm,&rank);
           MPI_Comm_size(comm,&commSize);
 
@@ -376,7 +389,7 @@ namespace Dune {
         {
           for (unsigned int i = 0; i < dim; i++)
           {
-            if (i==0)
+            /*if (i==0)
             {
               for (unsigned int j = 1; j!=vector_x.size();j++)
               {
@@ -411,9 +424,31 @@ namespace Dune {
                 };
                 globalIndices[i] = vector_z.size()-2; // subtract 2, because: there is one a cell fewer than mesh vector indices and at the very boundary we use the value of the last cell!
               }
+            } */
+            
+            
+            std::set<RF> coords = gridCoords[i];
+            typename std::set<RF>::iterator it;
+            
+            it = std::upper_bound (coords.begin(), coords.end(), location[i]);
+            if (it != coords.end())
+            {
+              //std::cout << *std::prev(it);
+              //std::cout << " "<< location[i] << " ";
+              //std::cout << *it  << "-> cell: ";
+              //std::cout << std::distance(coords.begin(), it)-1 << " || ";
+              globalIndices[i] = std::distance(coords.begin(), it)-1;
             }
-
-            //globalIndices[i] = (unsigned int) (location[i] * cells[i] / extensions[i]);
+            else
+            {
+              //std::cout << *std::prev(it);
+              //std::cout << " "<< location[i] << " ";
+              //std::cout << *(coords.rbegin())  << "-> cell: ";
+              //std::cout << coords.size()-2 << "(!) ";
+              //std::cout << std::endl;
+              globalIndices[i] = coords.size()-2;
+            }
+          //globalIndices[i] = (unsigned int) (location[i] * cells[i] / extensions[i]);
             localIndices[i]  = globalIndices[i] - offset[i];
           }
         }
@@ -440,4 +475,3 @@ namespace Dune {
 }
 
 #endif // DUNE_RANDOMFIELD_FIELDTRAITS_HH
-

@@ -118,6 +118,8 @@ void printParameters(int argc, char** argv)
   {
     Traits::GridTraits::Scalar s;
     (*conductivityField).evaluate(x,s);
+    if (std::string(argv[1]) == "--logprint")
+      s = log10(s);
     return s;
   };
   auto g = Dune::PDELab::makeGridFunctionFromCallable(gv,glambda);
@@ -139,7 +141,7 @@ void printParameters(int argc, char** argv)
   ZDGF zdgf(gfs,z);
   Dune::PDELab::interpolate(g,gfs,z); // Fill the coefficient vector
 
-  Dune::SubsamplingVTKWriter<GV> vtkwriter(gv,1);
+  Dune::SubsamplingVTKWriter<GV> vtkwriter(gv,0);
   vtkwriter.addVertexData(std::shared_ptr<VTKF>(new VTKF(zdgf,"data")));
   vtkwriter.pwrite(argv[2],"vtk","", Dune::VTK::appendedraw);
 }
@@ -151,12 +153,15 @@ int main(int argc, char** argv)
   {
     if (argc==1)
       transientTransport(argc,argv); // try to run the problem
-    else if (std::string(argv[1]) == "print")
+    else if (std::string(argv[1]) == "--print")
+      printParameters(argc,argv);
+    else if (std::string(argv[1]) == "--logprint")
       printParameters(argc,argv);
     else
       std::cout << "Possible options: \n"
       << "      (no option) -> run dune-ftg model\n"
-      << "      print [field] -> print parameter field as VTK\n"
+      << "      --print [field] -> print parameter field as VTK\n"
+      << "      --logprint [field] -> print log of  parameter field as VTK\n"
       << std::endl;
     return 0;
   }
