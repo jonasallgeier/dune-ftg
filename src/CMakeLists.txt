@@ -1,3 +1,5 @@
-add_executable("dune-ftg" dune-ftg.cc)
-target_link_dune_default_libraries("dune-ftg")
+add_executable("transient" transient.cc)
+add_executable("moments" moments.cc)
+target_link_dune_default_libraries("transient")
+target_link_dune_default_libraries("moments")
 dune_symlink_to_source_files(FILES modelling.ini boundary.groundwater boundary.geoelectrics boundary.transport electrode.configuration well.configuration fields)

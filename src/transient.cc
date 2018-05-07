@@ -17,7 +17,7 @@
 #include<dune/modelling/forwardmodel.hh>
 #include<dune/modelling/forwardadjointmodel.hh>
 
-#include<dune/ftg/modeltraits.hh>
+#include<dune/ftg/modeltraits_transient.hh>
 #include<dune/ftg/groundwater.hh>
 #include<dune/ftg/transport.hh>
 #include<dune/ftg/geoelectrics.hh>

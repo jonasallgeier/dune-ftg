@@ -11,7 +11,7 @@ cm.fieldgenerator_location = '../../../../../release-build/dune-randomfield/src/
 cm.vtk_out = true;
 
 cm.isequidistant = false;
-cm.seed = 2; % this is a matlab rng seed, which will later deliver different pseudo random reproducible seeds for dune-randomfield
+cm.seed = 6; % this is a matlab rng seed, which will later deliver different pseudo random reproducible seeds for dune-randomfield
 rng(cm.seed);
 
 % definition of general properties of grid

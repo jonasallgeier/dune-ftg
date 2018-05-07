@@ -1,7 +1,7 @@
 // -*- tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 // vi: set et ts=4 sw=2 sts=2:
-#ifndef DUNE_MODELLING_GROUNDWATER_HH
-#define DUNE_MODELLING_GROUNDWATER_HH
+#ifndef DUNE_MODELLING_MOMENTS_C0_HH
+#define DUNE_MODELLING_MOMENTS_C0_HH
 
 #include<dune/pdelab/common/referenceelements.hh>
 #include<dune/pdelab/finiteelementmap/p0fem.hh>
@@ -16,26 +16,25 @@ namespace Dune {
   namespace Modelling {
 
     /**
-     * @brief Parameter class for the groundwater flow equation
+     * @brief Parameter class for the solute transport equation
      */
     template<typename Traits>
-      class ModelParameters<Traits, ModelTypes::Groundwater>
+      class ModelParameters<Traits, typename ModelTypes::Moments_c0>
       : public ModelParametersBase<Traits>
       {
         using RF = typename Traits::GridTraits::RangeField;
 
-        using ParameterList   = typename Traits::ParameterList;
-        using ParameterField  = typename ParameterList::SubRandomField;
-        using MeasurementList = typename Traits::MeasurementList;
-        using SubMeasurements = typename MeasurementList::SubMeasurements;
+        using ParameterList  = typename Traits::ParameterList;
+        using ParameterField = typename ParameterList::SubRandomField;
 
         const Traits& traits;
 
-        std::shared_ptr<SolutionStorage<Traits,ModelTypes::Groundwater,Direction::Forward> > forwardStorage;
-        std::shared_ptr<SolutionStorage<Traits,ModelTypes::Groundwater,Direction::Adjoint> > adjointStorage;
+        std::shared_ptr<SolutionStorage<Traits,ModelTypes::Moments_c0,Direction::Forward> > forwardStorage;
+        std::shared_ptr<SolutionStorage<Traits,ModelTypes::Moments_c0,Direction::Adjoint> > adjointStorage;
 
-        std::shared_ptr<ParameterField> conductivityField;
-        std::shared_ptr<ParameterField> storativityField;
+        std::shared_ptr<ParameterField> porosityField;
+
+        std::shared_ptr<const ModelParameters<Traits,ModelTypes::Groundwater> > groundwaterParams;
 
         public:
 
@@ -52,7 +51,7 @@ namespace Dune {
          * @brief Set internal storage object for forward solution
          */
         void setStorage(
-            const std::shared_ptr<SolutionStorage<Traits,ModelTypes::Groundwater,Direction::Forward> > storage
+            const std::shared_ptr<SolutionStorage<Traits,ModelTypes::Moments_c0,Direction::Forward> > storage
             )
         {
           forwardStorage = storage;
@@ -62,7 +61,7 @@ namespace Dune {
          * @brief Set internal storage object for adjoint solution
          */
         void setStorage(
-            const std::shared_ptr<SolutionStorage<Traits,ModelTypes::Groundwater,Direction::Adjoint> > storage
+            const std::shared_ptr<SolutionStorage<Traits,ModelTypes::Moments_c0,Direction::Adjoint> > storage
             )
         {
           adjointStorage = storage;
@@ -71,27 +70,22 @@ namespace Dune {
         /**
          * @brief Provide access to underlying parameter fields
          */
-        void setParameterList(const std::shared_ptr<const ParameterList>& list)
+        void setParameterList(const std::shared_ptr<const typename Traits::ParameterList>& list)
         {
-          conductivityField = (*list).get("conductivity");
-          storativityField  = (*list).get("storativity");
+          porosityField = (*list).get("porosity");
         }
 
         /**
          * @brief Provide access to measurement storage object
          */
-        void setMeasurementList(const std::shared_ptr<const MeasurementList>& list)
+        void setMeasurementList(const std::shared_ptr<const typename Traits::MeasurementList>& list)
         {
-          std::shared_ptr<SubMeasurements> groundwater_Measurement(new SubMeasurements());
-          (*groundwater_Measurement).setTimes(1.00,2.44);          
-          // this is a way of interacting with the measurementlist, however it does not help yet...
-          //auto mysub = (*list).get("anything"); 
-          //(*mysub).extract(*forwardStorage,10,20);
+          //std::cout << "this is the setMeasurementList method of the transport model" << std::endl;
         }
 
         RF timestep() const
         {
-          return traits.config().template get<RF>("time.step_flow");
+          return traits.config().template get<RF>("time.step_transport");
         }
 
         /**
@@ -111,95 +105,62 @@ namespace Dune {
         }
 
         /**
-         * @brief Conductivity value at given position
+         * @brief Porosity value at given position
+         */
+        template<typename Domain>
+          RF porosity(const Domain& x) const
+          {
+            if (!porosityField)
+              DUNE_THROW(Dune::Exception,"porosity field not set in transport model parameters");
+
+            typename Traits::GridTraits::Scalar output;
+            (*porosityField).evaluate(x,output);
+            return output[0];
+          }
+	
+	      /**
+         * @brief Concentration at given position;
          */
         template<typename Element, typename Domain, typename Time>
-          RF cond(const Element& elem, const Domain& x, const Time& t) const
+          RF concentration(const Element& elem, const Domain& x, const Time& time) const
           {
-            
-            if (!conductivityField)
-            {
-              std::cout << "ModelParameters::cond " << this->name() << " " << this << std::endl;
-              DUNE_THROW(Dune::Exception,"conductivity field not set in groundwater model parameters");
-            }
-
-              unsigned int current_index = index_set().index(elem);
-              std::map<unsigned int,std::pair<RF,bool>> wellcells = well_cells(); //this step is necessary! direct usage of well_cells() leads to mismatch!
-              typename std::map<unsigned int,std::pair<RF,bool>>::iterator temp = wellcells.find(current_index);
-
-              if ( temp != wellcells.end() ) 
-              {
-                // a well cell -> return very high conductivity to achieve "shortcut" or very low conductivity to achieve "packer"
-                typename Traits::GridTraits::Scalar value;
-                value = 1.0;
-                if ( (temp->second).first == 0.0)
-                  value = 0;
-                return value[0];
-              }
-              // no well cell
-              typename Traits::GridTraits::Scalar value;
-              (*conductivityField).evaluate(elem,x,value);
-              return value[0];
+            typename Traits::GridTraits::Scalar localConcentration;
+            (*forwardStorage).value(time,elem,x,localConcentration);
+            return localConcentration[0];
           }
 
         /**
-         * @brief Storativity value at given position
-         */
-        template<typename Element, typename Domain, typename Time>
-          RF stor(const Element& elem, const Domain& x, const Time& t) const
-          {
-            if (!storativityField)
-            {
-              std::cout << "ModelParameters::stor " << this->name() << " " << this << std::endl;
-              DUNE_THROW(Dune::Exception,"storativity field not set in groundwater model parameters");
-            }
-
-            typename Traits::GridTraits::Scalar value;
-            (*storativityField).evaluate(elem,x,value);
-            return value[0];
-          }
-
-        /**
-         * @brief Water flux across given interface
+         * @brief Normal convective flux across interface
          */
         template<typename Intersection, typename IDomain, typename Time>
-          RF flux(const Intersection& is, const IDomain& x, const Time& time) const
+          RF vNormal (const Intersection& is, const IDomain& x, const Time& t) const
           {
-            typename Traits::GridTraits::Vector localFlux;
-            const auto& global  = is.geometry().global(x);
-            const auto& xInside = is.inside().geometry().local(global);
-            (*forwardStorage).flux(time,is.inside(),xInside,localFlux);
-
-            return localFlux * is.unitOuterNormal(x);
+            if (!groundwaterParams)
+              DUNE_THROW(Dune::Exception,"groundwater model parameters not set in transport model parameters");
+            
+            const auto& global = is.geometry().global(x);
+            return (*groundwaterParams).flux(is,x,t)/porosity(global); // !!! division by porosity !!!
           }
 
         /**
-         * @brief Maximum water flux on element (for CFL condition)
+         * @brief Constant for diffusive flux contribution
          */
-          template<typename Element, typename Time>
-          RF maxFluxNorm(const Element& elem, const Time& time) const
+        template<typename Element, typename Domain, typename Time>
+          RF diffusion (const Element& elem, const Domain& x, const Time& t) const
           {
-            RF output = 0.;
-            typename Traits::GridTraits::Vector localFlux;
+            return traits.config().template get<RF>("parameters.diffusion");
+          }
 
-            Dune::GeometryType type = elem.geometry().type();
-            const auto& rule = Dune::QuadratureRules
-              <typename Traits::GridTraits::DomainField, Traits::GridTraits::dim>::rule(type, 1);
-
-            // loop over quadrature points 
-            for(const auto& point : rule) 
-            {
-              const auto& x = point.position();
-              (*forwardStorage).flux(time,elem,x,localFlux);
-              RF norm = 0.;
-              for (const auto& entry : localFlux)
-                norm += entry*entry;
-              norm = std::sqrt(norm);
-
-              output = std::max(output,norm);
-            }
-
-            return output;
+        /**
+         * @brief Maximum velocity in cell for CFL condition
+         */
+        template<typename Element, typename Time>
+          RF maxVelocity(const Element& elem, const Time& time) const
+          {
+            if (!groundwaterParams)
+              DUNE_THROW(Dune::Exception,"groundwater model parameters not set in transport model parameters");
+            
+            return (*groundwaterParams).maxFluxNorm(elem,time)/porosity(elem.geometry().center());
           }
 
         /**
@@ -213,42 +174,28 @@ namespace Dune {
           }
 
         /**
-         * @brief Adjoint flux term based on measurements
-         */
-   /*     template<typename Intersection, typename IDomain, typename Time>
-          RF adjointFlux(const Intersection& is, const IDomain& x, const Time& t) const
-          {
-            // only needed for adjoint
-            return 0.;
-          }
-*/
-        /**
          * @brief Make ModelParameters of different model available
          */
         void registerModel(
-            const std::string& name,
-            const std::shared_ptr<ModelParameters<Traits,ModelTypes::Transport> >& otherParams
+            const std::string& name, 
+            const std::shared_ptr<ModelParameters<Traits,ModelTypes::Groundwater> >& otherParams
             )
         {
-          // only needed for adjoint
+          groundwaterParams = otherParams;
         }
-
-        auto& index_set() const
-        {
-          return traits.grid().leafGridView().indexSet();
-        };
 
         std::map<unsigned int, std::pair<RF, bool>> well_cells() const
         {
           return traits.read_well_cells();
         };
+
       };
 
     /**
-     * @brief Equation traits class for forward / adjoint groundwater flow equation
+     * @brief Equation traits class for forward / adjoint solute transport equation
      */
     template<typename Traits, typename DirectionType>
-      class EquationTraits<Traits, ModelTypes::Groundwater, DirectionType>
+      class EquationTraits<Traits, typename ModelTypes::Moments_c0, DirectionType>
       {
         public:
 
@@ -290,15 +237,15 @@ namespace Dune {
           template<typename... T>
             using StorageContainer = LastTwoContainer<T...>;
 
-          // use next timestep when interpolating stored solution
-          // alternatives: PreviousTimestep and LinearInterpolation
+          // use previous timestep when interpolating stored solution
+          // alternatives: NextTimestep and LinearInterpolation
           template<typename... T>
             using TemporalInterpolation = NextTimestep<T...>;
 
         private:
 
           const FEM fem;
-          GridFunctionSpace space;
+          const GridFunctionSpace space;
 
         public:
 
@@ -317,28 +264,27 @@ namespace Dune {
       };
 
     /**
-     * @brief Class representing initial condition for hydraulic head
+     * @brief Class representing initial condition for solute concentration
      */
     template<typename Traits>
-      class InitialValue<Traits, ModelTypes::Groundwater>
-      : public InitialValueBase<Traits,InitialValue<Traits,ModelTypes::Groundwater> >
+      class InitialValue<Traits, typename ModelTypes::Moments_c0>
+      : public InitialValueBase<Traits,InitialValue<Traits,ModelTypes::Moments_c0> >
       {
         public:
-
           template<typename GV>
             InitialValue(
-                const Traits& traits,
+                const Traits& traits_,
                 const GV& gv,
-                const ModelParameters<Traits,ModelTypes::Groundwater>& parameters
+                const ModelParameters<Traits,ModelTypes::Moments_c0>& parameters_
                 )
-            : InitialValueBase<Traits,InitialValue<Traits,ModelTypes::Groundwater> >(gv)
+            : InitialValueBase<Traits,InitialValue<Traits,ModelTypes::Moments_c0> >(gv)
             {}
 
           template<typename Domain, typename Value>
             void evaluateGlobal(const Domain& x, Value& y) const
             {
               // homogeneous initial/guess conditions
-              y = 0.;
+              y[0] = 0.;
             }
       };
 
@@ -346,79 +292,71 @@ namespace Dune {
       class SourceTerm;
 
     /**
-     * @brief Source term of groundwater flow equation
+     * @brief Source term of solute transport equation
      */
     template<typename Traits>
-      class SourceTerm<Traits, ModelTypes::Groundwater, Direction::Forward>
+      class SourceTerm<Traits, ModelTypes::Moments_c0, Direction::Forward>
       {
-          const ModelParameters<Traits,ModelTypes::Groundwater>& parameters;
-          using RF  = typename Traits::GridTraits::RangeField;
-          std::map<unsigned int, std::pair<RF, bool>> well_cells;
+        const Traits & traits;
+        const ModelParameters<Traits,ModelTypes::Moments_c0>& parameters;
+        typename Traits::GridTraits::Grid::LeafGridView  lgv;
+        using RF = typename Traits::GridTraits::RangeField;
+        using IDomain = typename Traits::GridTraits::IDomain;
+        RF c_in;
+        RF t_in;
+        std::map<unsigned int, std::pair<RF, bool>> well_cells;
+
         public:
 
-          SourceTerm(const ModelParameters<Traits,ModelTypes::Groundwater>& parameters_)
-          : parameters(parameters_)
+          SourceTerm(const Traits& traits_, const ModelParameters<Traits,ModelTypes::Moments_c0>& parameters_) : traits(traits_), parameters(parameters_), lgv(traits_.grid().leafGridView()) 
           {
+            c_in = traits.config().template get<RF>("tracer.c_in");
+            t_in = traits.config().template get<RF>("tracer.t_in");
             well_cells = parameters.well_cells();
           }
 
-          template<typename Element, typename Domain, typename Time>
-            auto q (const Element& elem, const Domain& x, const Time& t) const
+          template<typename Element, typename Domain, typename Value, typename Time>
+            auto q (const Element& elem, const Domain& x, const Value& value, const Time& t) const
             {
-              // initialize water pumping rate
-              
-              unsigned int current_index = parameters.index_set().index(elem);
+              // get the index of the current cell
+              unsigned int current_index = lgv.indexSet().index(elem);
               auto temp = well_cells.find(current_index);
 
               if ( !(temp->first == well_cells.end()->first) ) 
-              {
-                return (temp->second).first; // a well cell, return extraction rate
+              {  
+                if ( (temp->second).first <0) // an extraction well cell
+                {
+                  return (temp->second).first*value; // rate multiplied with concentration
+                } 
+                else if ( (temp->second).second == true && t <= t_in) // a tracer injection cell
+                {
+                  return (temp->second).first*c_in; // rate multiplied with concentration
+                }
               }
-              return 0.0; // no well cell
+              // if we end up here, this cell is neither source nor sink
+              return 0.0;
             }
       };
 
     /**
-     * @brief Source term of adjoint groundwater flow equation
-     */
-    template<typename Traits>
-      class SourceTerm<Traits, ModelTypes::Groundwater, Direction::Adjoint>
-      {
-        const ModelParameters<Traits,ModelTypes::Groundwater>& parameters;
-
-        public:
-
-        SourceTerm(const ModelParameters<Traits,ModelTypes::Groundwater>& parameters_)
-          : parameters(parameters_)
-        {}
-
-        template<typename Element, typename Domain, typename Time>
-          auto q (const Element& elem, const Domain& x, const Time& t) const
-          {
-            // adjoint source depends on parameters / measurements
-            return parameters.adjointSource(elem,x,t);
-          }
-      };
-
-    /**
-     * @brief Define groundwater equation as a differential equation
+     * @brief Define transport equation as a differential equation
      */
     template<typename Traits, typename DomainType, typename DirectionType>
-      class Equation<Traits,ModelTypes::Groundwater,DomainType,DirectionType>
-      : public DifferentialEquation<Traits,ModelTypes::Groundwater,DomainType,DirectionType>
+      class Equation<Traits,ModelTypes::Moments_c0,DomainType,DirectionType>
+      : public DifferentialEquation<Traits,ModelTypes::Moments_c0,DomainType,DirectionType>
       {
-        using DifferentialEquation<Traits,ModelTypes::Groundwater,DomainType,DirectionType>::DifferentialEquation;
+        using DifferentialEquation<Traits,ModelTypes::Moments_c0,DomainType,DirectionType>::DifferentialEquation;
       };
 
     /**
-     * @brief Spatial local operator of the groundwater flow equation (CCFV version)
+     * @brief Spatial local operator of the convection-diffusion equation (CCFV version)
      */
     template<typename Traits, typename DirectionType>
-      class SpatialOperator<Traits, ModelTypes::Groundwater, Discretization::CellCenteredFiniteVolume, DirectionType>
+      class SpatialOperator<Traits, typename ModelTypes::Moments_c0, Discretization::CellCenteredFiniteVolume, DirectionType>
       : public Dune::PDELab::NumericalJacobianSkeleton
-      <SpatialOperator<Traits, ModelTypes::Groundwater, Discretization::CellCenteredFiniteVolume, DirectionType> >,
+      <SpatialOperator<Traits, ModelTypes::Moments_c0, Discretization::CellCenteredFiniteVolume, DirectionType> >,
       public Dune::PDELab::NumericalJacobianBoundary
-        <SpatialOperator<Traits, ModelTypes::Groundwater, Discretization::CellCenteredFiniteVolume, DirectionType> >,
+        <SpatialOperator<Traits, ModelTypes::Moments_c0, Discretization::CellCenteredFiniteVolume, DirectionType> >,
       public Dune::PDELab::FullSkeletonPattern, 
       public Dune::PDELab::FullVolumePattern,
       public Dune::PDELab::LocalOperatorDefaultFlags,
@@ -440,19 +378,30 @@ namespace Dune {
         enum {doPatternSkeleton = true};
 
         // residual assembly flags
+//        enum {doAlphaVolume   = true};
+//        enum {doAlphaSkeleton = true};
+//        enum {doAlphaBoundary = true};
+
+        // residual assembly flags
         enum {doAlphaSkeleton  = true};
         enum {doAlphaBoundary  = true};
         enum {doLambdaVolume   = true};
         enum {doLambdaSkeleton = DirectionType::isAdjoint()};
         enum {doLambdaBoundary = true};
-
+     
         private:
 
-        const ModelParameters<Traits,ModelTypes::Groundwater>&              parameters;
-        const Boundary       <Traits,ModelTypes::Groundwater,DirectionType> boundary;
-        const SourceTerm     <Traits,ModelTypes::Groundwater,DirectionType> sourceTerm;
+        const Traits& traits;
 
+        const ModelParameters<Traits,ModelTypes::Moments_c0>&              parameters;
+        const Boundary       <Traits,ModelTypes::Moments_c0,DirectionType> boundary;
+        const SourceTerm     <Traits,ModelTypes::Moments_c0,DirectionType> sourceTerm;
+
+        RF adjointSign;
         RF time;
+
+        mutable bool firstStage;
+        mutable RF   dtmin;
 
         public:
 
@@ -460,11 +409,27 @@ namespace Dune {
          * @brief Constructor
          */
         SpatialOperator(
-            const Traits& traits,
-            const ModelParameters<Traits,ModelTypes::Groundwater>& parameters_
+            const Traits& traits_,
+            const ModelParameters<Traits,ModelTypes::Moments_c0>& parameters_
             )
-          : parameters(parameters_), boundary(traits,parameters.name()), sourceTerm(parameters)
-        {}
+          : traits(traits_), parameters(parameters_), boundary(traits,parameters.name()), sourceTerm(traits,parameters)
+        {
+          if (DirectionType::isAdjoint())
+            adjointSign = -1.;
+          else
+            adjointSign = 1.;
+        }
+
+        /**
+         * @brief Volume integral depending on test and ansatz functions
+         */
+        template<typename EG, typename LFSU, typename X, typename LFSV, typename R>
+          void alpha_volume (const EG& eg, const LFSU& lfsu, const X& x, const LFSV& lfsv, R& r) const
+          {
+            // contribution from source term
+            const Domain& cellCenterLocal = referenceElement(eg.geometry()).position(0,0);
+            r.accumulate(lfsv,0,-sourceTerm.q(eg.entity(),cellCenterLocal,x(lfsu,0),time));
+          }
 
         /**
          * @brief Skeleton integral depending on test and ansatz functions
@@ -476,6 +441,26 @@ namespace Dune {
               const LFSU& lfsu_n, const X& x_n, const LFSV& lfsv_n, 
               R& r_s, R& r_n) const
           {
+            // contribute to timestep calculation
+            if (firstStage)
+            {
+              // compute minimum local mesh width h
+              const RF faceVolume    = ig          .geometry().volume();
+              const RF insideVolume  = ig.inside() .geometry().volume();
+              const RF outsideVolume = ig.outside().geometry().volume();
+                  
+              const RF distance = havg(insideVolume,outsideVolume)/faceVolume;
+
+              // compute maximum local velocity |v|
+              const RF insideMaxVelocity  = parameters.maxVelocity(ig.inside() ,time);
+              const RF outsideMaxVelocity = parameters.maxVelocity(ig.outside(),time);
+              
+              const RF maxVelocity = std::max(insideMaxVelocity,outsideMaxVelocity);
+
+              // update minimum of admissable timesteps
+              dtmin = std::min(dtmin,distance/maxVelocity);
+            }
+
             const RF normalFlux = skeletonNormalFlux(ig.intersection(),x_s(lfsu_s,0),x_n(lfsu_n,0),time);
             const RF faceVolume = ig.geometry().volume();
 
@@ -484,102 +469,76 @@ namespace Dune {
           }
 
         /**
-         * @brief Skeleton integral depending on test and ansatz functions
+         * @brief Boundary integral depending on test and ansatz functions
          */
+        // We put the Dirichlet evaluation also in the alpha term to save some geometry evaluations
         template<typename IG, typename LFSU, typename X, typename LFSV, typename R>
           void alpha_boundary (const IG& ig, 
               const LFSU& lfsu_s, const X& x_s, const LFSV& lfsv_s,
               R& r_s) const
           {
+            // contribute to timestep calculation
+            if (firstStage)
+            {
+              // compute minimum local mesh width h
+              const RF faceVolume   = ig         .geometry().volume();
+              const RF insideVolume = ig.inside().geometry().volume();
+                  
+              const RF distance = insideVolume/faceVolume;
+
+              // compute maximum local velocity |v|
+              const RF maxVelocity = parameters.maxVelocity(ig.inside(),time);
+              
+              // update minimum of admissable timesteps
+              dtmin = std::min(dtmin,distance/maxVelocity);
+            }
+            
             const IDomain& faceCenterLocal = referenceElement(ig.geometry()).position(0,0);
+            const RF faceVolume = ig.geometry().volume();
 
             // evaluate boundary condition type
             Dune::Modelling::BoundaryCondition::Type bc = boundary.bc(ig.intersection(),faceCenterLocal,time);
-            if (!Dune::Modelling::BoundaryCondition::isDirichlet(bc))
+
+            // Neumann boundary condition
+            if (Dune::Modelling::BoundaryCondition::isNeumann(bc))
+            {
+              const RF j = boundary.j(ig.intersection(),faceCenterLocal,time);
+              r_s.accumulate(lfsu_s,0, j * faceVolume);
+              
               return;
-
-            // Dirichlet boundary conditions
-            const RF normalFlux = dirichletNormalFlux(ig.intersection(),x_s(lfsu_s,0),time);
-            const RF faceVolume = ig.geometry().volume();
-
-            r_s.accumulate(lfsv_s,0, normalFlux * faceVolume);
-          }
-
-        /**
-         * @brief Volume integral depending only on test functions (source term)
-         */
-        template<typename EG, typename LFSV, typename R>
-          void lambda_volume (const EG& eg, const LFSV& lfsv, R& r) const
-          {
-            const Domain& cellCenterLocal = referenceElement(eg.geometry()).position(0,0);
-            r.accumulate(lfsv,0, - sourceTerm.q(eg.entity(),cellCenterLocal,time));
-
-            if (DirectionType::isAdjoint())
-            {
-              RF q = 0.;
-
-              Dune::GeometryType geometrytype = eg.geometry().type();
-              /// @todo order
-              const Dune::QuadratureRule<DF, dim>& rule = Dune::QuadratureRules<DF, dim>::rule(geometrytype, 2);
-
-              // loop over quadrature points 
-              for(const auto& point : rule) 
-              {
-                const Domain& x = point.position();
-                const RF factor = point.weight() * eg.geometry().integrationElement(x);
-
-                q += sourceTerm.q(eg.entity(),x,time) * factor;
-              }
-
-              r.accumulate(lfsv,0, -q);
-            }
-          }
-
-        /**
-         * @brief Skeleton integral independent of ansatz functions
-         */
-        // each face is only visited ONCE!
- /*       template<typename IG, typename LFSV, typename R>
-          void lambda_skeleton (const IG& ig, const LFSV& lfsv_s, const LFSV& lfsv_n, R& r_s, R& r_n) const
-          {
-            RF q = 0.;
-
-            Dune::GeometryType geometrytype = ig.geometry().type();
-            /// @todo order
-            const Dune::QuadratureRule<DF, dim-1>& rule = Dune::QuadratureRules<DF, dim-1>::rule(geometrytype, 1);
-
-            // loop over quadrature points 
-            for(const auto& point : rule) 
-            {
-              const IDomain& x = point.position();
-              const RF factor  = point.weight() * ig.geometry().integrationElement(x);
-
-              q += parameters.adjointFlux(ig.intersection(),x,time) * factor;
             }
 
-            r_s.accumulate(lfsv_s,0, -q);
-            r_n.accumulate(lfsv_n,0,  q);
-          }
-*/
-        /**
-         * @brief Boundary integral independent of ansatz functions
-         */
-        template<typename IG, typename LFSV, typename R>
-          void lambda_boundary (const IG& ig, const LFSV& lfsv, R& r_s) const
-          {
-            const IDomain& faceCenterLocal = referenceElement(ig.geometry()).position(0,0);
+            // Dirichlet boundary condition
+            if (Dune::Modelling::BoundaryCondition::isDirichlet(bc))
+            {
+              const RF normalFlux = dirichletNormalFlux(ig.intersection(),x_s(lfsu_s,0),time);
+              const RF faceVolume = ig.geometry().volume();
 
-            // evaluate boundary condition type
-            Dune::Modelling::BoundaryCondition::Type bc = boundary.bc(ig.intersection(),faceCenterLocal,time);
-            if (!Dune::Modelling::BoundaryCondition::isNeumann(bc))
+              r_s.accumulate(lfsv_s,0, normalFlux * faceVolume);
+
               return;
+            }
 
-            // Neumann boundary conditions
-            const RF faceVolume = ig.geometry().volume();
-            const RF j = boundary.j(ig.intersection(),faceCenterLocal,time);
+            // Outflow boundary condition
 
-            r_s.accumulate(lfsv,0, j * faceVolume);
+            // advection velocity
+            const RF v = parameters.vNormal(ig.intersection(),faceCenterLocal,time);
+            r_s.accumulate(lfsu_s,0, v * x_s(lfsu_s,0) * faceVolume);
           }
+
+        /**
+         * @brief Set up CFL timestep calculation in first stage
+         */
+        void preStage(RF time, int r)
+        {
+          if (r == 1)
+          {
+            firstStage = true;
+            dtmin = std::numeric_limits<RF>::max();
+          }
+          else
+            firstStage = false;
+        }
 
         /**
          * @brief Set time for subsequent evaluation
@@ -692,9 +651,12 @@ namespace Dune {
               {
                 const Domain& cellCenterInside = referenceElement(is.inside().geometry()).position(0,0);
                 const RF boundaryFlux = boundary.j(is,faceCenterLocal,time);
-                const RF K_inside = parameters.cond(is.inside(),cellCenterInside,time);
+                const RF D_inside = parameters.diffusion(is.inside(),cellCenterInside,time);
+                typename Traits::GridTraits::Scalar innerValue;
+                (*scalar).evaluate(is.inside(), cellCenterInside,innerValue);
+                const RF v = adjointSign * parameters.vNormal(is,faceCenterLocal,time);
                 // revert flux computation to obtain gradient on boundary
-                return - boundaryFlux / K_inside;
+                return - (boundaryFlux - v * innerValue[0]) / D_inside;
               }
               else
                 DUNE_THROW(Dune::Exception,"unknown boundary condition type");
@@ -703,6 +665,17 @@ namespace Dune {
               return 0.;
           }
 
+        /**
+         * @brief Suggest timestep based on CFL condition
+         */
+/*        RF suggestTimestep(RF dt) const
+        {
+          if (dt*dtmin > 0.)
+            return   traits.comm().max(dtmin);
+          else
+            return - traits.comm().max(dtmin);
+        }
+*/
         private:
 
         /**
@@ -712,15 +685,22 @@ namespace Dune {
           RF skeletonNormalFlux(const Intersection& is, RF innerValue, RF outerValue, RF time) const
           {
             // geometry information
+            const IDomain& faceCenterLocal  = referenceElement(is.geometry()).position(0,0);
             const Domain& cellCenterInside  = referenceElement(is.inside() .geometry()).position(0,0);
             const Domain& cellCenterOutside = referenceElement(is.outside().geometry()).position(0,0);
 
-            // b gconductivity
-            const RF K_inside  = parameters.cond(is.inside(), cellCenterInside, time);
-            const RF K_outside = parameters.cond(is.outside(),cellCenterOutside,time);
-            const RF K = havg(K_inside,K_outside);
+            // advection velocity
+            const RF v = adjointSign * parameters.vNormal(is,faceCenterLocal,time);
 
-            return - K * skeletonNormalDerivative(is,innerValue,outerValue);
+            // upwinding
+            const RF upwindValue = (v >= 0) ? innerValue : outerValue;
+
+            // conductivity
+            const RF D_inside  = parameters.diffusion(is.inside(), cellCenterInside, time);
+            const RF D_outside = parameters.diffusion(is.outside(),cellCenterOutside,time);
+            const RF D = havg(D_inside,D_outside);
+
+            return v * upwindValue - D * skeletonNormalDerivative(is,innerValue,outerValue);
           }
 
         /**
@@ -749,12 +729,19 @@ namespace Dune {
           RF dirichletNormalFlux(const Intersection& is, RF innerValue, RF time) const
           {
             // geometry information
+            const IDomain& faceCenterLocal  = referenceElement(is.geometry()).position(0,0);
             const Domain&  cellCenterInside = referenceElement(is.inside().geometry()).position(0,0);
+            
+            // advection velocity
+            const RF v = parameters.vNormal(is,faceCenterLocal,time);
 
-            // conductivity
-            const RF K_inside = parameters.cond(is.inside(),cellCenterInside,time);
+            // upwinding
+            const RF upwindValue = (v >= 0) ? innerValue : boundary.g(is,faceCenterLocal,time);
 
-            return - K_inside * dirichletNormalDerivative(is,innerValue,time);
+            // diagonal diffusion tensor
+            const RF D_inside = parameters.diffusion(is.inside(),cellCenterInside,time);
+
+            return v * upwindValue - D_inside * dirichletNormalDerivative(is,innerValue,time);
           }
 
         /**
@@ -784,31 +771,84 @@ namespace Dune {
         template<typename T>
           T havg (T a, T b) const
           {
-            const T eps = 1e-30;
+            T eps = 1e-30;
             return 2./(1./(a + eps) + 1./(b + eps));
           }
 
       };
+/*
+    
+    template<typename Traits, typename DirectionType>
+      class TemporalOperator<Traits, typename ModelTypes::Moments_c0,
+            Discretization::CellCenteredFiniteVolume, DirectionType>
+      : public Dune::PDELab::NumericalJacobianVolume
+      <TemporalOperator<Traits, ModelTypes::Moments_c0, Discretization::CellCenteredFiniteVolume, DirectionType> >,
+      public Dune::PDELab::FullVolumePattern,
+      public Dune::PDELab::LocalOperatorDefaultFlags,
+      public Dune::PDELab::InstationaryLocalOperatorDefaultMethods<typename Traits::GridTraits::RangeField>
 
+      {
+        using RF = typename Traits::GridTraits::RangeField;
+
+        public:
+
+        // pattern assembly flags
+        enum {doPatternVolume = true};
+
+        // residual assembly flags
+        enum {doAlphaVolume = true};
+
+        private:
+
+        RF adjointSign;
+
+        public:
+
+
+        TemporalOperator(
+            const Traits& traits,
+            const ModelParameters<Traits,ModelTypes::Moments_c0>& parameters
+            ) 
+        {
+          if (DirectionType::isAdjoint())
+            adjointSign = -1.;
+          else
+            adjointSign = 1.;
+        }
+
+
+        template<typename EG, typename LFSU, typename X, typename LFSV, typename R>
+          void alpha_volume (const EG& eg, const LFSU& lfsu, const X& x, const LFSV& lfsv, R& r) const
+          {
+            r.accumulate(lfsv,0, adjointSign * x(lfsu,0) * eg.geometry().volume());
+          }
+
+        RF suggestTimestep (RF dt) const
+        {
+          return std::numeric_limits<RF>::max();
+        }
+
+      };
+*/
     /**
-     * @brief Class providing sensitivity computation for groundwater flow
+     * @brief Class providing sensitivity computation for solute transport
      */
     template<typename Traits>
-      class SensitivityComp<Traits,ModelTypes::Groundwater>
+      class SensitivityComp<Traits,ModelTypes::Moments_c0>
       {
         public:
 
           SensitivityComp(
               const Traits& traits,
-              const ModelParameters<Traits,ModelTypes::Groundwater>& parameters
+              const ModelParameters<Traits,ModelTypes::Moments_c0>& parameters
               )
           {}
 
-          void initialize(const std::shared_ptr<typename Traits::SensitivityList>& sensitivityList)
-          {
-          }
+            void initialize(const std::shared_ptr<typename Traits::SensitivityList>& sensitivityList)
+            {
+            }
 
-          template<typename Time>
+            template<typename Time>
             void extract(const Time& first, const Time& last)
             {
               std::cout << "(would extract sensitivity from " << first
@@ -820,4 +860,4 @@ namespace Dune {
   }
 }
 
-#endif // DUNE_MODELLING_GROUNDWATER_HH
+#endif // DUNE_MODELLING_MOMENTS_C0_HH

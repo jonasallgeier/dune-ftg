@@ -1,7 +1,7 @@
 // -*- tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 // vi: set et ts=4 sw=2 sts=2:
-#ifndef DUNE_MODELLING_GROUNDWATER_HH
-#define DUNE_MODELLING_GROUNDWATER_HH
+#ifndef DUNE_MODELLING_GROUNDWATER_MOMENTS_HH
+#define DUNE_MODELLING_GROUNDWATER_MOMENTS_HH
 
 #include<dune/pdelab/common/referenceelements.hh>
 #include<dune/pdelab/finiteelementmap/p0fem.hh>
@@ -82,8 +82,8 @@ namespace Dune {
          */
         void setMeasurementList(const std::shared_ptr<const MeasurementList>& list)
         {
-          std::shared_ptr<SubMeasurements> groundwater_Measurement(new SubMeasurements());
-          (*groundwater_Measurement).setTimes(1.00,2.44);          
+          //std::shared_ptr<SubMeasurements> groundwater_Measurement(new SubMeasurements());
+          //(*groundwater_Measurement).setTimes(1.00,2.44);          
           // this is a way of interacting with the measurementlist, however it does not help yet...
           //auto mysub = (*list).get("anything"); 
           //(*mysub).extract(*forwardStorage,10,20);
@@ -176,7 +176,7 @@ namespace Dune {
         /**
          * @brief Maximum water flux on element (for CFL condition)
          */
-          template<typename Element, typename Time>
+        template<typename Element, typename Time>
           RF maxFluxNorm(const Element& elem, const Time& time) const
           {
             RF output = 0.;
@@ -215,19 +215,19 @@ namespace Dune {
         /**
          * @brief Adjoint flux term based on measurements
          */
-   /*     template<typename Intersection, typename IDomain, typename Time>
+        template<typename Intersection, typename IDomain, typename Time>
           RF adjointFlux(const Intersection& is, const IDomain& x, const Time& t) const
           {
             // only needed for adjoint
             return 0.;
           }
-*/
+
         /**
          * @brief Make ModelParameters of different model available
          */
         void registerModel(
             const std::string& name,
-            const std::shared_ptr<ModelParameters<Traits,ModelTypes::Transport> >& otherParams
+            const std::shared_ptr<ModelParameters<Traits,ModelTypes::Moments_c0> >& otherParams
             )
         {
           // only needed for adjoint
@@ -539,7 +539,7 @@ namespace Dune {
          * @brief Skeleton integral independent of ansatz functions
          */
         // each face is only visited ONCE!
- /*       template<typename IG, typename LFSV, typename R>
+        template<typename IG, typename LFSV, typename R>
           void lambda_skeleton (const IG& ig, const LFSV& lfsv_s, const LFSV& lfsv_n, R& r_s, R& r_n) const
           {
             RF q = 0.;
@@ -560,7 +560,7 @@ namespace Dune {
             r_s.accumulate(lfsv_s,0, -q);
             r_n.accumulate(lfsv_n,0,  q);
           }
-*/
+
         /**
          * @brief Boundary integral independent of ansatz functions
          */
@@ -820,4 +820,5 @@ namespace Dune {
   }
 }
 
-#endif // DUNE_MODELLING_GROUNDWATER_HH
+#endif // DUNE_MODELLING_GROUNDWATER_MOMENTS_HH
+
