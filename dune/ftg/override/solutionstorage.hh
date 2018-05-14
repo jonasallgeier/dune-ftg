@@ -1,3 +1,5 @@
+// -*- tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+// vi: set et ts=4 sw=2 sts=2:
 #ifndef DUNE_MODELLING_SOLUTIONSTORAGE_HH
 #define DUNE_MODELLING_SOLUTIONSTORAGE_HH
 
@@ -472,6 +474,14 @@ namespace Dune {
             dgfPtr(new Dune::PDELab::VTKGridFunctionAdapter<ScalarDGF>(lowerScalarDGF,dataName));
           vtkwriter.addVertexData(dgfPtr);
           vtkwriter.pwrite(fileName,"vtk","",Dune::VTK::appendedraw);
+          
+          const typename GridTraits::Domain x = {0.5, 0.5, 0.5}; // get value at cell center
+          for (const auto & elem : elements (equationTraits.gfs().gridView()))
+          {
+            Scalar output = 0.0;  
+            value(time,elem,x,output);
+            std::cout<< "value: " << output << std::endl;
+          }
         }
 
         /**
