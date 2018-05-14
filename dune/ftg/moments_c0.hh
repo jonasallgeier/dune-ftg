@@ -118,17 +118,17 @@ namespace Dune {
             return output[0];
           }
 	
-	      /**
+	     /**
          * @brief Concentration at given position;
          */
-        template<typename Element, typename Domain, typename Time>
+/*        template<typename Element, typename Domain, typename Time>
           RF concentration(const Element& elem, const Domain& x, const Time& time) const
           {
             typename Traits::GridTraits::Scalar localConcentration;
             (*forwardStorage).value(time,elem,x,localConcentration);
             return localConcentration[0];
           }
-
+*/
         /**
          * @brief Normal convective flux across interface
          */
@@ -164,16 +164,6 @@ namespace Dune {
           }
 
         /**
-         * @brief Adjoint source term based on measurements
-         */
-        template<typename Element, typename Domain, typename Time>
-          RF adjointSource(const Element& elem, const Domain& x, const Time& t) const
-          {
-            // only needed for adjoint
-            return 0.;
-          }
-
-        /**
          * @brief Make ModelParameters of different model available
          */
         void registerModel(
@@ -184,11 +174,15 @@ namespace Dune {
           groundwaterParams = otherParams;
         }
 
+        auto& index_set() const
+        {
+          return traits.grid().leafGridView().indexSet();
+        };
+
         std::map<unsigned int, std::pair<RF, bool>> well_cells() const
         {
           return traits.read_well_cells();
         };
-
       };
 
     /**
@@ -221,11 +215,11 @@ namespace Dune {
           template<typename... T>
             using StationarySolver = StationaryLinearSolver<T...>;
           template<typename... T>
-            using TransientSolver  = ImplicitLinearSolver<T...>;
+            using TransientSolver  = ExplicitLinearSolver<T...>;
 
           // use implicit euler for timestepping
           // alternative: Alexander2
-          using OneStepScheme = Dune::PDELab::ImplicitEulerParameter<RangeField>;
+          using OneStepScheme = Dune::PDELab::ExplicitEulerParameter<RangeField>;
 
           // use RT0 flux reconstruction
           // alternatives: BDM1 and RT1
@@ -237,10 +231,10 @@ namespace Dune {
           template<typename... T>
             using StorageContainer = LastTwoContainer<T...>;
 
-          // use previous timestep when interpolating stored solution
-          // alternatives: NextTimestep and LinearInterpolation
+          // use next timestep when interpolating stored solution
+          // alternatives: PreviousTimestep and LinearInterpolation
           template<typename... T>
-            using TemporalInterpolation = NextTimestep<T...>;
+            using TemporalInterpolation = PreviousTimestep<T...>;
 
         private:
 
@@ -284,7 +278,7 @@ namespace Dune {
             void evaluateGlobal(const Domain& x, Value& y) const
             {
               // homogeneous initial/guess conditions
-              y[0] = 0.;
+              y= 0.0;
             }
       };
 
@@ -315,8 +309,8 @@ namespace Dune {
             well_cells = parameters.well_cells();
           }
 
-          template<typename Element, typename Domain, typename Value, typename Time>
-            auto q (const Element& elem, const Domain& x, const Value& value, const Time& t) const
+          template<typename Element, typename Domain, typename Time>
+            auto q (const Element& elem, const Domain& x,  const Time& t) const
             {
               // get the index of the current cell
               unsigned int current_index = lgv.indexSet().index(elem);
@@ -326,11 +320,11 @@ namespace Dune {
               {  
                 if ( (temp->second).first <0) // an extraction well cell
                 {
-                  return (temp->second).first*value; // rate multiplied with concentration
+                  return 0.0; //(temp->second).first*value; // rate multiplied with concentration
                 } 
-                else if ( (temp->second).second == true && t <= t_in) // a tracer injection cell
+                else if ( (temp->second).second == true) // a tracer injection cell
                 {
-                  return (temp->second).first*c_in; // rate multiplied with concentration
+                  return t_in*c_in;//(temp->second).first*c_in; // rate multiplied with concentration
                 }
               }
               // if we end up here, this cell is neither source nor sink
@@ -364,10 +358,7 @@ namespace Dune {
       {
         using GridTraits = typename Traits::GridTraits;
 
-        enum {dim = GridTraits::dim};
-
         using RF      = typename GridTraits::RangeField;
-        using DF      = typename GridTraits::DomainField;
         using Domain  = typename GridTraits::Domain;
         using IDomain = typename GridTraits::IDomain;
 
@@ -378,17 +369,13 @@ namespace Dune {
         enum {doPatternSkeleton = true};
 
         // residual assembly flags
-//        enum {doAlphaVolume   = true};
-//        enum {doAlphaSkeleton = true};
-//        enum {doAlphaBoundary = true};
-
-        // residual assembly flags
-        enum {doAlphaSkeleton  = true};
-        enum {doAlphaBoundary  = true};
+        enum {doAlphaVolume   = false};
+        enum {doAlphaSkeleton = true};
+        enum {doAlphaBoundary = true};
         enum {doLambdaVolume   = true};
-        enum {doLambdaSkeleton = DirectionType::isAdjoint()};
+        enum {doLambdaSkeleton = false};
         enum {doLambdaBoundary = true};
-     
+
         private:
 
         const Traits& traits;
@@ -396,6 +383,9 @@ namespace Dune {
         const ModelParameters<Traits,ModelTypes::Moments_c0>&              parameters;
         const Boundary       <Traits,ModelTypes::Moments_c0,DirectionType> boundary;
         const SourceTerm     <Traits,ModelTypes::Moments_c0,DirectionType> sourceTerm;
+
+        typename Traits::GridTraits::Grid::LeafGridView  lgv;
+        std::map<unsigned int, std::pair<RF, bool>> well_cells;
 
         RF adjointSign;
         RF time;
@@ -412,13 +402,27 @@ namespace Dune {
             const Traits& traits_,
             const ModelParameters<Traits,ModelTypes::Moments_c0>& parameters_
             )
-          : traits(traits_), parameters(parameters_), boundary(traits,parameters.name()), sourceTerm(traits,parameters)
+          : traits(traits_), parameters(parameters_), boundary(traits,parameters.name()), sourceTerm(traits,parameters), lgv(traits_.grid().leafGridView()) 
         {
           if (DirectionType::isAdjoint())
             adjointSign = -1.;
           else
             adjointSign = 1.;
+          well_cells = parameters.well_cells();
         }
+
+
+        template<typename EG, typename LFSV, typename R>
+          void lambda_volume (const EG& eg, const LFSV& lfsv, R& r) const
+          {
+            // contribution from source term
+            const Domain& cellCenterLocal = referenceElement(eg.geometry()).position(0,0);
+            r.accumulate(lfsv,0,-sourceTerm.q(eg.entity(),cellCenterLocal,time));
+          }
+
+        template<typename IG, typename LFSV, typename R>
+          void lambda_boundary (const IG& ig, const LFSV& lfsv, R& r_s) const
+          {}
 
         /**
          * @brief Volume integral depending on test and ansatz functions
@@ -426,9 +430,6 @@ namespace Dune {
         template<typename EG, typename LFSU, typename X, typename LFSV, typename R>
           void alpha_volume (const EG& eg, const LFSU& lfsu, const X& x, const LFSV& lfsv, R& r) const
           {
-            // contribution from source term
-            const Domain& cellCenterLocal = referenceElement(eg.geometry()).position(0,0);
-            r.accumulate(lfsv,0,-sourceTerm.q(eg.entity(),cellCenterLocal,x(lfsu,0),time));
           }
 
         /**
@@ -460,6 +461,49 @@ namespace Dune {
               // update minimum of admissable timesteps
               dtmin = std::min(dtmin,distance/maxVelocity);
             }
+
+/*
+            unsigned int index_inside = lgv.indexSet().index(ig.inside());
+            unsigned int index_outside = lgv.indexSet().index(ig.outside());
+            auto temp_inside  = well_cells.find(index_inside);
+            auto temp_outside = well_cells.find(index_outside);
+
+            if ( !(temp_inside->first == well_cells.end()->first) ) 
+            {  
+              if ( (temp_inside->second).first <0) // an extraction well cell
+              {
+                //std::cout<< "water extraction cell found" << std::endl;
+              } 
+              else if ( (temp_inside->second).second == true) // a tracer injection cell
+              {
+                std::cout<< "tracer injection cell found (self)     "<< index_inside << std::endl;
+
+                const RF normalFlux = skeletonNormalFlux(ig.intersection(),0.5,x_n(lfsu_n,0),time);
+                const RF faceVolume = ig.geometry().volume();
+                r_s.accumulate(lfsv_s,0, normalFlux * faceVolume);
+                r_n.accumulate(lfsv_s,0, -normalFlux * faceVolume);
+                return;
+              }
+            }
+
+            if ( !(temp_outside->first == well_cells.end()->first) ) 
+            {  
+              if ( (temp_outside->second).first <0) // an extraction well cell
+              {
+                //std::cout<< "water extraction cell found" << std::endl;
+              } 
+              else if ( (temp_outside->second).second == true) // a tracer injection cell
+              {
+                std::cout<< "tracer injection cell found (neighbor) "<< index_outside << std::endl;
+
+                const RF normalFlux = skeletonNormalFlux(ig.intersection(),x_s(lfsu_s,0),0.5,time);
+                const RF faceVolume = ig.geometry().volume();
+                r_s.accumulate(lfsv_s,0, normalFlux * faceVolume);
+                r_n.accumulate(lfsv_s,0, -normalFlux * faceVolume);
+                return;
+              }
+            }
+*/
 
             const RF normalFlux = skeletonNormalFlux(ig.intersection(),x_s(lfsu_s,0),x_n(lfsu_n,0),time);
             const RF faceVolume = ig.geometry().volume();
@@ -668,14 +712,14 @@ namespace Dune {
         /**
          * @brief Suggest timestep based on CFL condition
          */
-/*        RF suggestTimestep(RF dt) const
+        RF suggestTimestep(RF dt) const
         {
           if (dt*dtmin > 0.)
             return   traits.comm().max(dtmin);
           else
             return - traits.comm().max(dtmin);
         }
-*/
+
         private:
 
         /**
@@ -721,6 +765,7 @@ namespace Dune {
 
             return w;
           }
+
 
         /**
          * @brief Flux in normal direction on Dirichlet boundary
@@ -776,8 +821,10 @@ namespace Dune {
           }
 
       };
-/*
-    
+
+  /**
+     * @brief Temporal local operator of the convection-diffusion equation (CCFV version)
+     */
     template<typename Traits, typename DirectionType>
       class TemporalOperator<Traits, typename ModelTypes::Moments_c0,
             Discretization::CellCenteredFiniteVolume, DirectionType>
@@ -804,7 +851,9 @@ namespace Dune {
 
         public:
 
-
+        /**
+         * @brief Constructor
+         */
         TemporalOperator(
             const Traits& traits,
             const ModelParameters<Traits,ModelTypes::Moments_c0>& parameters
@@ -816,7 +865,9 @@ namespace Dune {
             adjointSign = 1.;
         }
 
-
+        /**
+         * @brief Volume integral depending on test and ansatz functions
+         */
         template<typename EG, typename LFSU, typename X, typename LFSV, typename R>
           void alpha_volume (const EG& eg, const LFSU& lfsu, const X& x, const LFSV& lfsv, R& r) const
           {
@@ -829,7 +880,8 @@ namespace Dune {
         }
 
       };
-*/
+
+
     /**
      * @brief Class providing sensitivity computation for solute transport
      */

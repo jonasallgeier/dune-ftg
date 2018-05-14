@@ -7,12 +7,12 @@ home
 % define vectors of electrode placement
 x_values = 10/3*[-1.5 -.5 .5 1.5];
 y_values = 10/3*[-1.5 -.5 .5 1.5];
-z_values = linspace(-20,0,9);
+z_values = linspace(-10,0,9);
 
 % transformation of coordinates, here movement of origin
-x_values = x_values+50;
-y_values = y_values+35;
-z_values = z_values+20;
+%x_values = x_values+50;
+%y_values = y_values+35;
+%z_values = z_values+20;
 
 % get coordinate vector of electrodes
 coordinates = zeros(length(x_values)*length(y_values)*length(z_values),3);

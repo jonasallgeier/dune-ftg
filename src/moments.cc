@@ -52,7 +52,7 @@ void moments(int argc, char** argv)
 
   // insert groundwater and transport model into forward model list
   forwardModelList.add<GroundwaterModel>("groundwater");
-  forwardModelList.add<Moments_c0_Model,GroundwaterModel>("transport",std::list<std::string>{"groundwater"});
+  forwardModelList.add<Moments_c0_Model,GroundwaterModel>("moments_c0",std::list<std::string>{"groundwater"});
   
   //set_electrodes<ModelTraits>(&modelTraits);
   set_wells<ModelTraits>(&modelTraits);

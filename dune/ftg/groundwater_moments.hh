@@ -213,16 +213,6 @@ namespace Dune {
           }
 
         /**
-         * @brief Adjoint flux term based on measurements
-         */
-        template<typename Intersection, typename IDomain, typename Time>
-          RF adjointFlux(const Intersection& is, const IDomain& x, const Time& t) const
-          {
-            // only needed for adjoint
-            return 0.;
-          }
-
-        /**
          * @brief Make ModelParameters of different model available
          */
         void registerModel(
@@ -379,28 +369,6 @@ namespace Dune {
       };
 
     /**
-     * @brief Source term of adjoint groundwater flow equation
-     */
-    template<typename Traits>
-      class SourceTerm<Traits, ModelTypes::Groundwater, Direction::Adjoint>
-      {
-        const ModelParameters<Traits,ModelTypes::Groundwater>& parameters;
-
-        public:
-
-        SourceTerm(const ModelParameters<Traits,ModelTypes::Groundwater>& parameters_)
-          : parameters(parameters_)
-        {}
-
-        template<typename Element, typename Domain, typename Time>
-          auto q (const Element& elem, const Domain& x, const Time& t) const
-          {
-            // adjoint source depends on parameters / measurements
-            return parameters.adjointSource(elem,x,t);
-          }
-      };
-
-    /**
      * @brief Define groundwater equation as a differential equation
      */
     template<typename Traits, typename DomainType, typename DirectionType>
@@ -513,26 +481,6 @@ namespace Dune {
           {
             const Domain& cellCenterLocal = referenceElement(eg.geometry()).position(0,0);
             r.accumulate(lfsv,0, - sourceTerm.q(eg.entity(),cellCenterLocal,time));
-
-            if (DirectionType::isAdjoint())
-            {
-              RF q = 0.;
-
-              Dune::GeometryType geometrytype = eg.geometry().type();
-              /// @todo order
-              const Dune::QuadratureRule<DF, dim>& rule = Dune::QuadratureRules<DF, dim>::rule(geometrytype, 2);
-
-              // loop over quadrature points 
-              for(const auto& point : rule) 
-              {
-                const Domain& x = point.position();
-                const RF factor = point.weight() * eg.geometry().integrationElement(x);
-
-                q += sourceTerm.q(eg.entity(),x,time) * factor;
-              }
-
-              r.accumulate(lfsv,0, -q);
-            }
           }
 
         /**
@@ -821,4 +769,3 @@ namespace Dune {
 }
 
 #endif // DUNE_MODELLING_GROUNDWATER_MOMENTS_HH
-
