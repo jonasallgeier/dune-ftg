@@ -485,28 +485,45 @@ namespace Dune {
 
         void printGeoelectrics(const RF time, const int& modelNumber, const std::string& timeString, const std::string& filenamebase)
         {
+          
+          std::vector<unsigned int> electrode_cells = traits.read_electrode_cell_indices();
+
+          if (traits.rank() == 0 && modelNumber == 0)
+          {
+            std::ofstream timefile;
+            std::string timefilename;
+            timefilename.append(filenamebase);
+            timefilename.append(".times");
+
+            if (firsttime)
+            {
+              timefile.open(timefilename, std::ios::out | std::ios::trunc); // clear the file
+              firsttime = false;
+              timefile << electrode_cells.size() << std::endl;
+            } else 
+            {
+              timefile.open(timefilename, std::ios::app); // append to file
+            }
+
+            timefile << time << std::endl;
+            timefile.close();
+          }
 
           std::ofstream outfile;
           std::string filename;
           filename.append(filenamebase);
           filename.append("_");
           filename.append(std::to_string(modelNumber+1));
+          filename.append("_");
+          filename.append(timeString);
           filename.append(".data");
 
-          if (firsttime) 
-          {
-            outfile.open(filename, std::ios::out | std::ios::trunc);
-            outfile.close();
-          }
+          outfile.open(filename, std::ios::out | std::ios::trunc);
+          outfile.close();  // fist clear the file
 
-          outfile.open(filename, std::ios::app);
-          if (traits.rank() == 0)
-          {
-            outfile << "begin" << std::endl;
-            outfile << timeString << std::endl;
-          }
+          outfile.open(filename, std::ios::app); // then append all the data of the different processors
+
   
-          std::vector<unsigned int> electrode_cells = traits.read_electrode_cell_indices();
 
           const typename GridTraits::Domain x = {0.5, 0.5, 0.5}; // get value at cell center
 
@@ -546,13 +563,7 @@ namespace Dune {
             outfile << elem_map.first << " " << elem_map.second << std::endl;
           }
 
-          if (traits.rank() == 0)
-          {
-            outfile << "end" << std::endl;
-            outfile << std::endl;
-          }
           outfile.close();
-          std::cout << "finished for source electrode " << modelNumber << std::endl;
         }
 
 

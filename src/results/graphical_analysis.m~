@@ -63,9 +63,9 @@ handles.n_conf = 4650;
 [~,handles.Y_elec,handles.X_elec,handles.Z_elec,~]=textread('electrode.configuration','%f %f %f %f %d',...
     144,'headerlines',1);
 
-%handles.Z_elec=-handles.Z_elec;
-%handles.X_elec=handles.X_elec-5;
-%handles.Y_elec=handles.Y_elec-5;
+handles.Z_elec=-handles.Z_elec;
+handles.X_elec=handles.X_elec-5;
+handles.Y_elec=handles.Y_elec-5;
 
 %load workspace_after_solution.mat
 
@@ -88,7 +88,6 @@ times = times(2:end);
 
 data3d = NaN(no_electrodes,no_electrodes,length(times));
 
-textprogressbar('Reading the data ');
 for i = 1:no_electrodes
     for j = 1:length(times)
         time = times(j);
@@ -98,7 +97,6 @@ for i = 1:no_electrodes
         data = sortrows(data);  % sort, so we get a vector of 1->no_electrodes
         data3d(i,data(:,1),j) = data(:,2);
     end
-    textprogressbar(100*i/no_electrodes);
 end
 
 
