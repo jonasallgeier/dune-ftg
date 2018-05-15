@@ -37,6 +37,7 @@ namespace Dune {
         std::shared_ptr<const ModelParameters<Traits,ModelTypes::Groundwater> > groundwaterParams;
 
         public:
+          unsigned int model_number = 0;
 
         ModelParameters(const Traits& traits_, const std::string& name)
           : ModelParametersBase<Traits>(name), traits(traits_)

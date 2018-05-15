@@ -1,3 +1,5 @@
+// -*- tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+// vi: set et ts=4 sw=2 sts=2:
 #ifndef DUNE_MODELLING_EQUATION_HH
 #define DUNE_MODELLING_EQUATION_HH
 
@@ -295,30 +297,21 @@ namespace Dune {
             oldSolution = newSolution;
 
             // print solution if selected
-            if (traits.config().template get<bool>("output.writeVTK",false))
+            if (traits.config().template get<bool>("output.writeVTK",false) || traits.config().template get<bool>("output.writeGeoelectrics",false))
             {
               printTimer.start();
               
               std::stringstream ss;
               ss << time;
               std::string timeString(ss.str());
-              if (DirectionType::isAdjoint())
+              if (traits.config().template get<bool>("output.writeVTK",false))
               {
-                (*storage).printValue   (time,parameters.name()+".adjointValue."
-                    +timeString,parameters.name()+".adjointValue");
-                (*storage).printFlux    (time,parameters.name()+".adjointFlux."
-                    +timeString,parameters.name()+".adjointFlux");
-                (*storage).printGradient(time,parameters.name()+".adjointGradient."
-                    +timeString,parameters.name()+".adjointGradient");
-              }
-              else
-              {
-                (*storage).printValue   (time,parameters.name()+".forwardValue."
+                (*storage).printValue(time,parameters.name()+".forwardValue."
                     +timeString,parameters.name()+".forwardValue");
-                //(*storage).printFlux    (time,parameters.name()+".forwardFlux."
-                //    +timeString,parameters.name()+".forwardFlux");
-                //(*storage).printGradient(time,parameters.name()+".forwardGradient."
-                //    +timeString,parameters.name()+".forwardGradient");
+              }
+              if (traits.config().template get<bool>("output.writeGeoelectrics",false) && (parameters.name().substr(0, 12).compare("geoelectrics") == 0))
+              {
+                (*storage).printGeoelectrics(time,parameters.model_number,timeString,traits.config().template get<std::string>("output.writeGeoelectricsFilename","results"));
               }
               
               printTimer.stop();

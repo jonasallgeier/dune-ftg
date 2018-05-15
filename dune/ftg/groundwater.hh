@@ -38,6 +38,7 @@ namespace Dune {
         std::shared_ptr<ParameterField> storativityField;
 
         public:
+          unsigned int model_number = 0;
 
         ModelParameters(const Traits& traits_, const std::string& name)
           : ModelParametersBase<Traits>(name), traits(traits_)

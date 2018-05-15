@@ -333,6 +333,13 @@ namespace Dune {
         mutable std::shared_ptr<FluxDGF>      lowerFluxDGF, upperFluxDGF;
         mutable std::shared_ptr<LinFluxDGF>   lowerLinFluxDGF, upperLinFluxDGF;
 
+        auto& index_set() const
+        {
+          return traits.grid().leafGridView().indexSet();
+        };
+        
+        bool firsttime = true;
+
         public:
 
         SolutionStorage(
@@ -474,15 +481,80 @@ namespace Dune {
             dgfPtr(new Dune::PDELab::VTKGridFunctionAdapter<ScalarDGF>(lowerScalarDGF,dataName));
           vtkwriter.addVertexData(dgfPtr);
           vtkwriter.pwrite(fileName,"vtk","",Dune::VTK::appendedraw);
-          
+        }
+
+        void printGeoelectrics(const RF time, const int& modelNumber, const std::string& timeString, const std::string& filenamebase)
+        {
+
+          std::ofstream outfile;
+          std::string filename;
+          filename.append(filenamebase);
+          filename.append("_");
+          filename.append(std::to_string(modelNumber+1));
+          filename.append(".data");
+
+          if (firsttime) 
+          {
+            outfile.open(filename, std::ios::out | std::ios::trunc);
+            outfile.close();
+          }
+
+          outfile.open(filename, std::ios::app);
+          if (traits.rank() == 0)
+          {
+            outfile << "begin" << std::endl;
+            outfile << timeString << std::endl;
+          }
+  
+          std::vector<unsigned int> electrode_cells = traits.read_electrode_cell_indices();
+
           const typename GridTraits::Domain x = {0.5, 0.5, 0.5}; // get value at cell center
+
+          //declare output map for this source electrode; [1:144]
+          std::map<unsigned int, RF> output_map;
+
           for (const auto & elem : elements (equationTraits.gfs().gridView()))
           {
-            Scalar output = 0.0;  
-            value(time,elem,x,output);
-            std::cout<< "value: " << output << std::endl;
+            //check if this cell is a measurement cell/is multiple measurement cells --> get electrode numbers of current cell
+            unsigned int cell_index = index_set().index(elem);
+            std::vector<unsigned int> affected_electrodes; 
+            
+            auto lambda_compare = [cell_index](unsigned int n) { return (n==cell_index); };
+            
+            std::vector<unsigned int>::iterator it = std::find_if (electrode_cells.begin(), electrode_cells.end(), lambda_compare);
+            while ((electrode_cells.end()) != it) 
+            {
+              affected_electrodes.push_back( distance(electrode_cells.begin(), it) );
+              //std::cout << "The value is " << *it << "; the position is " << output.back() << '\n';
+              it++;
+              it = std::find_if (it, electrode_cells.end(), lambda_compare);
+            }
+
+            // if there is one or more electrodes -> measure the potential & write output in output vector
+            if (affected_electrodes.size() > 0)
+            {
+              Scalar output = 0.0;  
+              value(time,elem,x,output);
+              for(std::vector<unsigned int>::iterator iter = affected_electrodes.begin(); iter != affected_electrodes.end(); ++iter)
+              {
+                output_map.insert ( std::pair<unsigned int,RF>(*iter+1,output) );
+              } 
+            }
           }
+          for(auto elem_map : output_map)
+          {
+            outfile << elem_map.first << " " << elem_map.second << std::endl;
+          }
+
+          if (traits.rank() == 0)
+          {
+            outfile << "end" << std::endl;
+            outfile << std::endl;
+          }
+          outfile.close();
+          std::cout << "finished for source electrode " << modelNumber << std::endl;
         }
+
 
         /**
          * @brief Create VTK output of gradient of solution

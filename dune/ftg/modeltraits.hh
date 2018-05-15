@@ -259,6 +259,7 @@ class ModelTraits
     // mechanism to define the vector of grid indices that contain electrodes
     void set_electrode_cell_indices(std::vector<unsigned int> cell_indices)
     {
+      //std::sort(cell_indices.begin(), cell_indices.end()); // sort, so we can use binary search later on
       electrode_cell_indices = cell_indices;
     }
 

@@ -40,7 +40,7 @@ namespace Dune {
         
         unsigned int electrode_cell_indx;
         public:
-          int model_number;
+          unsigned int model_number;
         
         ModelParameters(const Traits& traits_, const std::string& name)
           : ModelParametersBase<Traits>(name), traits(traits_)
