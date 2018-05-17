@@ -26,7 +26,7 @@ namespace Dune {
         using ParameterList   = typename Traits::ParameterList;
         using ParameterField  = typename ParameterList::SubRandomField;
         using MeasurementList = typename Traits::MeasurementList;
-        using SubMeasurements = typename MeasurementList::SubMeasurements;
+        //using SubMeasurements = typename MeasurementList::SubMeasurements;
 
         const Traits& traits;        
         
@@ -93,8 +93,10 @@ namespace Dune {
         void setMeasurementList(const std::shared_ptr<const MeasurementList>& list)
         {
 
-          std::shared_ptr<SubMeasurements> geoelectric_Measurement(new SubMeasurements());
-          (*geoelectric_Measurement).setTimes(1.00,2.44);
+          //(*list).SubMearurements::printToFile = true;
+
+          //std::shared_ptr<SubMeasurements> geoelectric_Measurement(new SubMeasurements());
+          //(*geoelectric_Measurement).setTimes(1.00,2.44);
 
           //auto test = (*list).get("geoelectrics");
 

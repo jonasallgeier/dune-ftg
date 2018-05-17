@@ -158,40 +158,7 @@ class ModelTraits
       using Intersection = typename GridView::Intersection;
     };
 
-    // dummy implementation
-    struct MeasurementList
-    {
-      struct SubMeasurements
-      {
-        void setTimes(const RF& one, const RF& two)
-        {}
 
-        RF suggestPreviousTime(const RF& firstTime, const RF& lastTime) const
-        {
-          return firstTime;
-        }
-
-        RF suggestNextTime(const RF& firstTime, const RF& lastTime) const
-        {
-          return lastTime;
-        }
-
-        template<typename Storage>
-        void extract(const Storage& storage, const RF& firstTime, const RF& lastTime)
-        {
-          //auto mytest = rank();
-          //auto mytest = (*storage).traits; // no possible... traits are private!
-          std::cout << "(would extract measurements " << firstTime << " to " << lastTime << ")" << std::endl;
-          //(*storage).value(time,elem,x,output);
-        }
-      };
-
-      std::shared_ptr<SubMeasurements> sub;
-      const std::shared_ptr<SubMeasurements>& get(const std::string& name) const
-      {
-        return sub;
-      }
-    };
 
     // dummy implementation
     struct SensitivityList
@@ -391,7 +358,173 @@ class ModelTraits
     };
     
     //call constructor to read in well configuration from file specified in .ini; data is stored in a struct object
-    WellConfiguration wellconfiguration {duneConfig.get<std::string>("configfiles.wells"),rank()};    
+    WellConfiguration wellconfiguration {duneConfig.get<std::string>("configfiles.wells"),rank()};
+
+    
+    
+    
+    // dummy implementation
+    class MeasurementList
+    {
+      private:
+        const ModelTraits& traits;
+        bool clearFiles = true;
+        std::map<unsigned int, std::map<unsigned int, RF> > output_all_electrodes;
+        
+        auto& index_set() const
+        {
+          return traits.grid().leafGridView().indexSet();
+        };
+
+      public:
+      MeasurementList(const ModelTraits& traits_)
+        : traits(traits_)
+      {}
+
+      //struct SubMeasurements
+      //{
+
+        
+        //bool printToFile = false;
+
+        void setTimes(const RF& one, const RF& two)
+        {}
+
+        RF suggestPreviousTime(const RF& firstTime, const RF& lastTime) const
+        {
+          return firstTime;
+        }
+
+        RF suggestNextTime(const RF& firstTime, const RF& lastTime) const
+        {
+          return lastTime;
+        }
+
+        template<typename Storage>
+        void extract(const Storage& storage, const RF& firstTime, const RF& time, const unsigned int& modelNumber,const std::string& timeString)              
+        {
+          std::vector<unsigned int> electrode_cells = traits.read_electrode_cell_indices();
+          const typename GridTraits::Domain x = {0.5, 0.5, 0.5}; // get value at cell center
+
+          //declare output map for this source electrode; [1:144]
+          std::map<unsigned int, RF> output_this_electrode;
+      
+          
+          Dune::Timer timer;
+    
+          for (const auto & elem : elements (traits.grid().leafGridView()))
+          {
+            //check if this cell is a measurement cell/is multiple measurement cells --> get electrode numbers of current cell
+            unsigned int cell_index = index_set().index(elem);
+            std::vector<unsigned int> affected_electrodes; 
+            
+            auto lambda_compare = [cell_index](unsigned int n) { return (n==cell_index); };
+            
+            std::vector<unsigned int>::iterator it = std::find_if (electrode_cells.begin(), electrode_cells.end(), lambda_compare);
+            while ((electrode_cells.end()) != it) 
+            {
+              affected_electrodes.push_back( distance(electrode_cells.begin(), it) );
+              it++;
+              it = std::find_if (it, electrode_cells.end(), lambda_compare);
+            }
+
+            // if there is one or more electrodes -> measure the potential & write output in output vector
+            if (affected_electrodes.size() > 0)
+            {
+              typename GridTraits::Scalar output = 0.0;  
+              (*storage).value(time,elem,x,output);
+              for(std::vector<unsigned int>::iterator iter = affected_electrodes.begin(); iter != affected_electrodes.end(); ++iter)
+              {
+                output_this_electrode.insert ( std::pair<unsigned int,RF>(*iter+1,output) );
+              } 
+            }
+          }
+
+          //IDEA: maybe solve the problem without maps... just arrays; one array for the size allowing to sum up and a multidimensional array for the data...
+
+          
+          output_all_electrodes.insert(std::pair<unsigned int,std::map<unsigned int, RF> >(modelNumber+1,output_this_electrode));
+
+          // if this is the last geoelectrics model, give signal to print output to file
+          if (modelNumber+1 == electrode_cells.size())
+          {
+            std::map<unsigned int, std::map<unsigned int, RF> > local_array[1] = {output_all_electrodes};
+            //auto maxTime = traits.grid().leafGridView().comm().max(timertest);
+            //double all_times[traits.grid().leafGridView().comm().size()];
+            unsigned int thesize = traits.grid().leafGridView().comm().size();
+            std::map<unsigned int, std::map<unsigned int, RF> > global_array[];
+
+            //traits.grid().leafGridView().comm().gather (local_array, global_array,1,0);
+
+            traits.grid().leafGridView().comm().gatherv (local_array, output_all_electrodes.size(), global_array, 0, thesize, 0);
+            if (traits.grid().leafGridView().comm().rank()==0){
+              std::cout << "printing ERT results" << std::endl;
+
+              // print the temporal information to a timefile
+              std::string filenamebase = traits.config().template get<std::string>("output.writeGeoelectricsFilename","results");
+              std::ofstream timefile;
+              std::string timefilename;
+              timefilename.append(filenamebase);
+              timefilename.append(".times");
+    
+              //std::stringstream ss;
+              //ss << traits.rank();
+              //std::string rank(ss.str());
+
+              std::ofstream outfile;
+              std::string filename;
+              filename.append(filenamebase);
+              filename.append("_");
+              //filename.append(rank);
+              //filename.append("_");
+              filename.append(timeString);
+              filename.append(".data");
+              
+              //gv.comm().max(time)
+
+              if (clearFiles)
+              {
+                timefile.open(timefilename, std::ios::out | std::ios::trunc); // clear the file
+                clearFiles = false;
+                timefile << electrode_cells.size() << std::endl;
+              } else 
+              {
+                timefile.open(timefilename, std::ios::app); // append to file
+              }
+              timefile << time << std::endl;
+              timefile.close();
+              
+              outfile.open(filename, std::ios::out | std::ios::trunc);
+              outfile.close();  // fist clear the file
+              
+              outfile.open(filename, std::ios::app); // then append all the data of the different processors
+
+              std::cout << "the size: " << thesize << std::endl;
+
+              for(unsigned int i = 0; i < thesize; ++i)
+              {
+                auto the_map = global_array[i];
+                for (auto it=the_map.begin(); it!=the_map.end(); ++it)
+                //for (auto injection_electrode : global_array[i])
+                {
+                  for (auto measurement_electrode : it->second)
+                  {
+                    std::cout << "injected at " << it->first << " | measured at " << measurement_electrode.first << " | potential is " << measurement_electrode.second << std::endl;
+                  }
+                }
+              }
+              outfile.close();
+              output_all_electrodes.clear(); // reset local storage of all ERT measurements
+            }
+          }
+      };
+
+      //std::shared_ptr<SubMeasurements> sub;
+      //const std::shared_ptr<SubMeasurements>& get(const std::string& name) const
+      //{
+      //  return sub;
+      //}
+    };
 };
 
 

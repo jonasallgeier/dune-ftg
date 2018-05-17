@@ -304,7 +304,7 @@ namespace Dune {
         using GradientDGF = FluxReconstruction<Traits, ModelType, DirectionType, Reconstruction::Gradient>;
         using FluxDGF     = FluxReconstruction<Traits, ModelType, DirectionType, Reconstruction::Flux>;
         using LinFluxDGF  = FluxReconstruction<Traits, ModelType, DirectionType, Reconstruction::LinFlux>;
-
+        
         const Traits&                                         traits;
         const ModelParameters<Traits,ModelType>&              parameters;
         const EquationTraits<Traits,ModelType,DirectionType>& equationTraits;
@@ -332,13 +332,6 @@ namespace Dune {
         mutable std::shared_ptr<GradientDGF>  lowerGradientDGF, upperGradientDGF;
         mutable std::shared_ptr<FluxDGF>      lowerFluxDGF, upperFluxDGF;
         mutable std::shared_ptr<LinFluxDGF>   lowerLinFluxDGF, upperLinFluxDGF;
-
-        auto& index_set() const
-        {
-          return traits.grid().leafGridView().indexSet();
-        };
-        
-        bool firsttime = true;
 
         public:
 
@@ -482,11 +475,16 @@ namespace Dune {
           vtkwriter.addVertexData(dgfPtr);
           vtkwriter.pwrite(fileName,"vtk","",Dune::VTK::appendedraw);
         }
-
-        void printGeoelectrics(const RF time, const int& modelNumber, const std::string& timeString, const std::string& filenamebase)
+/*
+        void printGeoelectrics(const RF time, const unsigned int& modelNumber, const std::string& timeString, const std::string& filenamebase)
         {
           
           std::vector<unsigned int> electrode_cells = traits.read_electrode_cell_indices();
+          // if this is the last geoelectrics model, give signal to print output to file
+          if (modelNumber+1 == electrode_cells.size())
+          {
+            //traits.measurements.printToFile = true;
+          }
 
           if (traits.rank() == 0 && modelNumber == 0)
           {
@@ -523,7 +521,6 @@ namespace Dune {
 
           outfile.open(filename, std::ios::app); // then append all the data of the different processors
 
-  
 
           const typename GridTraits::Domain x = {0.5, 0.5, 0.5}; // get value at cell center
 
@@ -558,15 +555,15 @@ namespace Dune {
               } 
             }
           }
-          for(auto elem_map : output_map)
-          {
-            outfile << elem_map.first << " " << elem_map.second << std::endl;
-          }
-
-          outfile.close();
+          //for(auto elem_map : output_map)
+          //{
+          //  outfile << elem_map.first << " " << elem_map.second << std::endl;
+          //}
+      //traits.measurements.output_set.insert(output_map);
+          //outfile.close();
         }
 
-
+*/
         /**
          * @brief Create VTK output of gradient of solution
          */

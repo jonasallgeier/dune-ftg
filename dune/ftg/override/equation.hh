@@ -21,7 +21,7 @@ namespace Dune {
       {
         using ParameterList   = typename Traits::ParameterList;
         using MeasurementList = typename Traits::MeasurementList;
-        using Measurements    = typename MeasurementList::SubMeasurements;
+        //using Measurements    = typename MeasurementList::SubMeasurements;
 
         public:
 
@@ -30,8 +30,9 @@ namespace Dune {
          */
         virtual void initialize(
             const std::shared_ptr<const ParameterList>& parameterList,
-            const std::shared_ptr<const MeasurementList>& measurementList,
-            const std::shared_ptr<Measurements>& measurements
+            //const std::shared_ptr<const MeasurementList>& measurementList,
+            //const std::shared_ptr<Measurements>& measurements
+            const std::shared_ptr<MeasurementList>& measurements
             ) = 0;
 
         /**
@@ -56,7 +57,7 @@ namespace Dune {
       {
         using ParameterList   = typename Traits::ParameterList;
         using MeasurementList = typename Traits::MeasurementList;
-        using Measurements    = typename MeasurementList::SubMeasurements;
+        //using Measurements    = typename MeasurementList::SubMeasurements;
 
         public:
 
@@ -65,8 +66,9 @@ namespace Dune {
          */
         virtual void initialize(
             const std::shared_ptr<const ParameterList>& parameterList,
-            const std::shared_ptr<const MeasurementList>& measurementList,
-            const std::shared_ptr<Measurements>& measurements
+            //const std::shared_ptr<const MeasurementList>& measurementList,
+            //const std::shared_ptr<Measurements>& measurements
+            const std::shared_ptr<MeasurementList>& measurements
             ) = 0;
 
         /**
@@ -102,7 +104,7 @@ namespace Dune {
 
           using ParameterList   = typename Traits::ParameterList;
           using MeasurementList = typename Traits::MeasurementList;
-          using Measurements    = typename MeasurementList::SubMeasurements;
+          //using Measurements    = typename MeasurementList::SubMeasurements;
 
           using GFS        = typename EquationTraits<Traits,ModelType,DirectionType>::GridFunctionSpace;
           using GridVector = typename EquationTraits<Traits,ModelType,DirectionType>::GridVector;
@@ -137,12 +139,12 @@ namespace Dune {
 
           std::shared_ptr<Solver<Traits,ModelType,DirectionType> >          solver;
           std::shared_ptr<SolutionStorage<Traits,ModelType,DirectionType> > storage;
-          std::shared_ptr<Measurements>                                     measurements;
-
+          //std::shared_ptr<Measurements>                                     measurements;
+          std::shared_ptr<MeasurementList>                                    measurements;
           mutable Dune::Timer stepTimer, printTimer;
-
+          
         public:
-
+          
           /**
            * @brief Constructor
            */
@@ -177,13 +179,14 @@ namespace Dune {
            */
           void initialize(
               const std::shared_ptr<const ParameterList>& parameterList,
-              const std::shared_ptr<const MeasurementList>& measurementList,
-              const std::shared_ptr<Measurements>& measurements_
+              //const std::shared_ptr<const MeasurementList>& measurementList,
+              //const std::shared_ptr<Measurements>& measurements_
+              const std::shared_ptr<MeasurementList>& measurements_
               )
           {
             // set up parameter class
             parameters.setParameterList(parameterList);
-            parameters.setMeasurementList(measurementList);
+            //parameters.setMeasurementList(measurementList);
             measurements = measurements_;
 
             // set up solution vectors
@@ -309,10 +312,10 @@ namespace Dune {
                 (*storage).printValue(time,parameters.name()+".forwardValue."
                     +timeString,parameters.name()+".forwardValue");
               }
-              if (traits.config().template get<bool>("output.writeGeoelectrics",false) && (parameters.name().substr(0, 12).compare("geoelectrics") == 0))
-              {
-                (*storage).printGeoelectrics(time,parameters.model_number,timeString,traits.config().template get<std::string>("output.writeGeoelectricsFilename","results"));
-              }
+              //if (traits.config().template get<bool>("output.writeGeoelectrics",false) && (parameters.name().substr(0, 12).compare("geoelectrics") == 0))
+              //{
+              //  (*storage).printGeoelectrics(time,parameters.model_number,timeString,traits.config().template get<std::string>("output.writeGeoelectricsFilename","results"));
+              //}
               
               printTimer.stop();
             }
@@ -350,7 +353,15 @@ namespace Dune {
            */
           void extractMeasurements()
           {
-            (*measurements).extract(storage,time - usedTimestep,time);
+            printTimer.start();
+            if (traits.config().template get<bool>("output.writeGeoelectrics",false) && (parameters.name().substr(0, 12).compare("geoelectrics") == 0))
+            {
+              std::stringstream ss;
+              ss << time;
+              std::string timeString(ss.str());
+              (*measurements).extract(storage,time - usedTimestep,time,parameters.model_number,timeString);
+            }
+            printTimer.stop();
           }
 
           /**

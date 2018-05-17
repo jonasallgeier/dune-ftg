@@ -58,8 +58,9 @@ namespace Dune {
 
           virtual void initForward(
               const std::shared_ptr<const typename Traits::ParameterList>& parameterList,
-              const std::shared_ptr<typename Traits::MeasurementList>& measurementList,
-              const std::shared_ptr<typename Traits::MeasurementList::SubMeasurements>& measurements
+              //const std::shared_ptr<typename Traits::MeasurementList>& measurementList,
+              //const std::shared_ptr<typename Traits::MeasurementList::SubMeasurements>& measurements
+              const std::shared_ptr<typename Traits::MeasurementList>& measurements
               ) = 0;
 
           virtual void solveForward() = 0;
@@ -136,11 +137,12 @@ namespace Dune {
            */
           virtual void initForward(
               const std::shared_ptr<const typename Traits::ParameterList>& parameterList,
-              const std::shared_ptr<typename Traits::MeasurementList>& measurementList,
-              const std::shared_ptr<typename Traits::MeasurementList::SubMeasurements>& measurements
+              //const std::shared_ptr<typename Traits::MeasurementList>& measurementList,
+              //const std::shared_ptr<typename Traits::MeasurementList::SubMeasurements>& measurements
+              const std::shared_ptr<typename Traits::MeasurementList>& measurements
               )
           {
-            equation.initialize(parameterList,measurementList,measurements);
+            equation.initialize(parameterList,measurements);//,measurementList,measurements);
           }
 
           /**
@@ -404,8 +406,8 @@ namespace Dune {
               )
           {
             for (ModelPair& pair : list)
-              pair.second->initForward(parameterList,measurementList,
-                  measurementList->get(pair.first));
+              pair.second->initForward(parameterList,measurementList);//,
+                  //measurementList->get(pair.first));
           }
 
           /**
