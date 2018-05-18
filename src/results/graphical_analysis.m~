@@ -377,13 +377,14 @@ timevector = hours(handles.times/3600);
 plot(timevector,reshape(handles.current_ts,[1,size(handles.current_ts,3)]),'kx-');
 %xlim([0 handles.times]);
 grid on;
-ylabel('\Delta\phi in V');
+ylabel('R');
 xlabel('t (hh:mm)');
 %ytickformat('%#3.2f')
 xtickformat('hh:mm')
 xticks(6*floor(timevector(1)/6,'hours'):hours(6):6*ceil(timevector(end)/6,'hours'))
-set(handles.axes1,'XMinorTick','on','YMinorTick','on')
+set(gca,'XMinorTick','on','YMinorTick','on')
 handles.axes1.XAxis.MinorTickValues = [6*floor(timevector(1)/6,'hours'):hours(1):6*ceil(timevector(end)/6,'hours')];
+xminortick on
 set(gca,'FontName','LM Roman 10','FontWeight','bold')
 
 axes(handles.axes5);

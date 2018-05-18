@@ -353,15 +353,13 @@ namespace Dune {
            */
           void extractMeasurements()
           {
-            printTimer.start();
             if (traits.config().template get<bool>("output.writeGeoelectrics",false) && (parameters.name().substr(0, 12).compare("geoelectrics") == 0))
             {
               std::stringstream ss;
               ss << time;
               std::string timeString(ss.str());
-              (*measurements).extract(storage,time - usedTimestep,time,parameters.model_number,timeString);
+              (*measurements).extract(storage,time - usedTimestep,time,parameters.model_number,timeString,printTimer);
             }
-            printTimer.stop();
           }
 
           /**
@@ -372,16 +370,10 @@ namespace Dune {
             if (traits.rank() == 0)
             {
               if (stepTimer.elapsed()    > 1e-3)
-                std::cout << "Time for "
-                  << (DirectionType::isAdjoint()?"adjoint ":"")
-                  << "equation " << parameters.name()
-                  << " solve " << stepTimer.elapsed()  << std::endl;
+                std::cout << "Time for " << (DirectionType::isAdjoint()?"adjoint ":"") << "equation " << parameters.name() << " solve " << stepTimer.elapsed()  << std::endl;
               
               if (printTimer.elapsed()   > 1e-3)
-                std::cout << "Time for "
-                  << (DirectionType::isAdjoint()?"adjoint ":"")
-                  << "equation " << parameters.name()
-                  << " print " << printTimer.elapsed() << std::endl;
+                std::cout << "Time for " << (DirectionType::isAdjoint()?"adjoint ":"") << "equation " << parameters.name() << " print " << printTimer.elapsed() << std::endl;
             }
 
             stepTimer.reset();
