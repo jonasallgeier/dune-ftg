@@ -1,7 +1,7 @@
 // -*- tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 // vi: set et ts=4 sw=2 sts=2:
-#ifndef DUNE_MODELLING_GROUNDWATER_MOMENTS_HH
-#define DUNE_MODELLING_GROUNDWATER_MOMENTS_HH
+#ifndef DUNE_FTG_GROUNDWATER_MOMENTS_HH
+#define DUNE_FTG_GROUNDWATER_MOMENTS_HH
 
 #include<dune/pdelab/common/referenceelements.hh>
 #include<dune/pdelab/finiteelementmap/p0fem.hh>
@@ -27,7 +27,7 @@ namespace Dune {
         using ParameterList   = typename Traits::ParameterList;
         using ParameterField  = typename ParameterList::SubRandomField;
         using MeasurementList = typename Traits::MeasurementList;
-        using SubMeasurements = typename MeasurementList::SubMeasurements;
+        //using SubMeasurements = typename MeasurementList::SubMeasurements;
 
         const Traits& traits;
 
@@ -38,6 +38,7 @@ namespace Dune {
         std::shared_ptr<ParameterField> storativityField;
 
         public:
+          unsigned int model_number = 0;
 
         ModelParameters(const Traits& traits_, const std::string& name)
           : ModelParametersBase<Traits>(name), traits(traits_)
@@ -176,7 +177,7 @@ namespace Dune {
         /**
          * @brief Maximum water flux on element (for CFL condition)
          */
-        template<typename Element, typename Time>
+          template<typename Element, typename Time>
           RF maxFluxNorm(const Element& elem, const Time& time) const
           {
             RF output = 0.;
@@ -487,7 +488,7 @@ namespace Dune {
          * @brief Skeleton integral independent of ansatz functions
          */
         // each face is only visited ONCE!
-        template<typename IG, typename LFSV, typename R>
+ /*       template<typename IG, typename LFSV, typename R>
           void lambda_skeleton (const IG& ig, const LFSV& lfsv_s, const LFSV& lfsv_n, R& r_s, R& r_n) const
           {
             RF q = 0.;
@@ -508,7 +509,7 @@ namespace Dune {
             r_s.accumulate(lfsv_s,0, -q);
             r_n.accumulate(lfsv_n,0,  q);
           }
-
+*/
         /**
          * @brief Boundary integral independent of ansatz functions
          */
@@ -768,4 +769,4 @@ namespace Dune {
   }
 }
 
-#endif // DUNE_MODELLING_GROUNDWATER_MOMENTS_HH
+#endif // DUNE_FTG_GROUNDWATER_MOMENTS_HH

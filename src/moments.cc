@@ -54,7 +54,7 @@ void moments(int argc, char** argv)
   forwardModelList.add<GroundwaterModel>("groundwater");
   forwardModelList.add<Moments_c0_Model,GroundwaterModel>("moments_c0",std::list<std::string>{"groundwater"});
   
-  //set_electrodes<ModelTraits>(&modelTraits);
+  set_electrodes<ModelTraits>(&modelTraits);
   set_wells<ModelTraits>(&modelTraits);
   
   // print information about model list, avoid multiple outputs if run is parallel
@@ -65,7 +65,7 @@ void moments(int argc, char** argv)
   using ParameterList   = ModelTraits::ParameterList;
   using MeasurementList = ModelTraits::MeasurementList;
   std::shared_ptr<ParameterList>   parameterList  (new ParameterList(config.template get<std::string>("fields.location")));
-  std::shared_ptr<MeasurementList> measurementList(new MeasurementList());
+  std::shared_ptr<MeasurementList> measurementList(new MeasurementList(modelTraits));
 
   // perform forward run
   forwardModelList.solve(parameterList,measurementList);

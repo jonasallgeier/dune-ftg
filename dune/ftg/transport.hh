@@ -1,7 +1,7 @@
 // -*- tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 // vi: set et ts=4 sw=2 sts=2:
-#ifndef DUNE_MODELLING_TRANSPORT_HH
-#define DUNE_MODELLING_TRANSPORT_HH
+#ifndef DUNE_FTG_TRANSPORT_HH
+#define DUNE_FTG_TRANSPORT_HH
 
 #include<dune/pdelab/common/referenceelements.hh>
 #include<dune/pdelab/finiteelementmap/p0fem.hh>
@@ -119,7 +119,7 @@ namespace Dune {
             return output[0];
           }
 	
-	      /**
+	/**
          * @brief Concentration at given position;
          */
         template<typename Element, typename Domain, typename Time>
@@ -197,7 +197,6 @@ namespace Dune {
         {
           return traits.read_well_cells();
         };
-
       };
 
     /**
@@ -347,29 +346,6 @@ namespace Dune {
             }
       };
 
-    /**
-     * @brief Source term of adjoint solute transport equation
-     */
-    /*
-    template<typename Traits>
-      class SourceTerm<Traits, ModelTypes::Transport, Direction::Adjoint>
-      {
-        const ModelParameters<Traits,ModelTypes::Transport>& parameters;
-
-        public:
-
-        SourceTerm(const ModelParameters<Traits,ModelTypes::Transport>& parameters_)
-          : parameters(parameters_)
-        {}
-
-        template<typename Element, typename Domain, typename Value, typename Time>
-          auto q (const Element& elem, const Domain& x, const Value& value, const Time& t) const
-          {
-            // adjoint source depends on parameters / measurements
-            return parameters.adjointSource(elem,x,t);
-          }
-      };
-    */
     /**
      * @brief Define transport equation as a differential equation
      */
@@ -889,4 +865,4 @@ namespace Dune {
   }
 }
 
-#endif // DUNE_MODELLING_TRANSPORT_HH
+#endif // DUNE_FTG_TRANSPORT_HH

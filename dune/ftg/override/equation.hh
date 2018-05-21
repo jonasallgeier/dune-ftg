@@ -300,23 +300,15 @@ namespace Dune {
             oldSolution = newSolution;
 
             // print solution if selected
-            if (traits.config().template get<bool>("output.writeVTK",false) || traits.config().template get<bool>("output.writeGeoelectrics",false))
+            if (traits.config().template get<bool>("output.writeVTK",false))
             {
               printTimer.start();
               
               std::stringstream ss;
               ss << time;
               std::string timeString(ss.str());
-              if (traits.config().template get<bool>("output.writeVTK",false))
-              {
                 (*storage).printValue(time,parameters.name()+".forwardValue."
                     +timeString,parameters.name()+".forwardValue");
-              }
-              //if (traits.config().template get<bool>("output.writeGeoelectrics",false) && (parameters.name().substr(0, 12).compare("geoelectrics") == 0))
-              //{
-              //  (*storage).printGeoelectrics(time,parameters.model_number,timeString,traits.config().template get<std::string>("output.writeGeoelectricsFilename","results"));
-              //}
-              
               printTimer.stop();
             }
           }

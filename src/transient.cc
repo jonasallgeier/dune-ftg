@@ -26,7 +26,7 @@
 
 using namespace Dune::Modelling;
 
-void transientTransport(int argc, char** argv)
+void transient(int argc, char** argv)
 {
   Dune::Timer totalTimer;
   totalTimer.start();
@@ -243,7 +243,7 @@ int main(int argc, char** argv)
   try
   {
     if (argc==1)
-      transientTransport(argc,argv); // try to run the problem
+      transient(argc,argv); // try to run the problem
     else if (std::string(argv[1]) == "--print")
       printParameters(argc,argv);
     else if (std::string(argv[1]) == "--logprint")

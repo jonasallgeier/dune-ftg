@@ -1,8 +1,8 @@
 // -*- tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 // vi: set et ts=4 sw=2 sts=2:
 
-#ifndef DUNE_MODELLING_EXAMPLE_HH
-#define DUNE_MODELLING_EXAMPLE_HH
+#ifndef DUNE_FTG_MODELTRAITS_TRANSIENT_HH
+#define DUNE_FTG_MODELTRAITS_TRANSIENT_HH
 
 #include<dune/grid/yaspgrid.hh>
 // use slightly modified version of dune/randomfield.hh
@@ -226,7 +226,6 @@ class ModelTraits
     // mechanism to define the vector of grid indices that contain electrodes
     void set_electrode_cell_indices(std::vector<unsigned int> cell_indices)
     {
-      //std::sort(cell_indices.begin(), cell_indices.end()); // sort, so we can use binary search later on
       electrode_cell_indices = cell_indices;
     }
 
@@ -360,10 +359,6 @@ class ModelTraits
     //call constructor to read in well configuration from file specified in .ini; data is stored in a struct object
     WellConfiguration wellconfiguration {duneConfig.get<std::string>("configfiles.wells"),rank()};
 
-    
-    
-    
-    // dummy implementation
     class MeasurementList
     {
       private:
@@ -513,4 +508,4 @@ struct ModelTypes
 };
 
 
-#endif // DUNE_MODELLING_EXAMPLE_HH
+#endif // DUNE_FTG_MODELTRAITS_TRANSIENT_HH

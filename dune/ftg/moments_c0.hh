@@ -1,7 +1,7 @@
 // -*- tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 // vi: set et ts=4 sw=2 sts=2:
-#ifndef DUNE_MODELLING_MOMENTS_C0_HH
-#define DUNE_MODELLING_MOMENTS_C0_HH
+#ifndef DUNE_FTG_MOMENTS_C0_HH
+#define DUNE_FTG_MOMENTS_C0_HH
 
 #include<dune/pdelab/common/referenceelements.hh>
 #include<dune/pdelab/finiteelementmap/p0fem.hh>
@@ -37,6 +37,7 @@ namespace Dune {
         std::shared_ptr<const ModelParameters<Traits,ModelTypes::Groundwater> > groundwaterParams;
 
         public:
+          unsigned int model_number = 0;
 
         ModelParameters(const Traits& traits_, const std::string& name)
           : ModelParametersBase<Traits>(name), traits(traits_)
@@ -118,7 +119,7 @@ namespace Dune {
             return output[0];
           }
 	
-	     /**
+	/**
          * @brief Concentration at given position;
          */
 /*        template<typename Element, typename Domain, typename Time>
@@ -211,14 +212,14 @@ namespace Dune {
           using DiscretizationType = Discretization::CellCenteredFiniteVolume;
 
           // use linear solver in stationary case,
-          // implicit linear solver for transient case
+          // explicit linear solver for transient case
           template<typename... T>
             using StationarySolver = StationaryLinearSolver<T...>;
           template<typename... T>
             using TransientSolver  = ExplicitLinearSolver<T...>;
 
-          // use implicit euler for timestepping
-          // alternative: Alexander2
+          // use explicit Euler for timestepping
+          // alternative: Heun
           using OneStepScheme = Dune::PDELab::ExplicitEulerParameter<RangeField>;
 
           // use RT0 flux reconstruction
@@ -231,8 +232,8 @@ namespace Dune {
           template<typename... T>
             using StorageContainer = LastTwoContainer<T...>;
 
-          // use next timestep when interpolating stored solution
-          // alternatives: PreviousTimestep and LinearInterpolation
+          // use previous timestep when interpolating stored solution
+          // alternatives: NextTimestep and LinearInterpolation
           template<typename... T>
             using TemporalInterpolation = PreviousTimestep<T...>;
 
@@ -766,7 +767,6 @@ namespace Dune {
             return w;
           }
 
-
         /**
          * @brief Flux in normal direction on Dirichlet boundary
          */
@@ -822,7 +822,7 @@ namespace Dune {
 
       };
 
-  /**
+    /**
      * @brief Temporal local operator of the convection-diffusion equation (CCFV version)
      */
     template<typename Traits, typename DirectionType>
@@ -881,7 +881,6 @@ namespace Dune {
 
       };
 
-
     /**
      * @brief Class providing sensitivity computation for solute transport
      */
@@ -912,4 +911,4 @@ namespace Dune {
   }
 }
 
-#endif // DUNE_MODELLING_MOMENTS_C0_HH
+#endif // DUNE_FTG_MOMENTS_C0_HH
