@@ -41,8 +41,15 @@ void transient(int argc, char** argv)
    
   // use double for coordinates and values, dim = 3;
   using ModelTraits = ModelTraits<double,double,3>;
-  ModelTraits   modelTraits(helper,config);  //this will also read in the electrode configuration file
+  
+  bool evaluateBasePotentials;
+  if (std::string(argv[1]) == "--basepotential")
+    evaluateBasePotentials = true;
+  else
+    evaluateBasePotentials = false;
 
+  ModelTraits   modelTraits(helper,config,evaluateBasePotentials);  //this will also read in the electrode configuration file
+    
   // define forward model
   using ForwardModelList = ForwardModelList<ModelTraits>;
   ForwardModelList   forwardModelList(modelTraits);
@@ -86,8 +93,6 @@ void transient(int argc, char** argv)
   totalTimer.stop();
   if (helper.rank() == 0)
     std::cout << "Total time elapsed: " << totalTimer.elapsed() << std::endl;
-
-
   
   if (helper.rank()== 0 && modelTraits.config().template get<bool>("output.unify_parallel_results",false))
   {
@@ -125,14 +130,24 @@ void transient(int argc, char** argv)
       {
         std::string infilename;
         infilename.append(filenamebase);
-        infilename.append("_");
-        infilename.append(timeString);
+
+        if (modelTraits.basePotentialEvaluation)
+        {
+          infilename.append("_base");
+        } else
+        {
+          infilename.append("_");
+          infilename.append(timeString);
+        }
+
         infilename.append("_");
         std::stringstream ss;
         ss << proc;
         std::string rank(ss.str());
         infilename.append(rank);
         infilename.append(".data");
+
+
         std::ifstream infile(infilename);
 
         //skip header line
@@ -161,8 +176,14 @@ void transient(int argc, char** argv)
         std::ofstream outfile;
         std::string outfilename;
         outfilename.append(filenamebase);
-        outfilename.append("_");
-        outfilename.append(timeString);
+        if (modelTraits.basePotentialEvaluation)
+        {
+          outfilename.append("_base");
+        } else
+        { 
+          outfilename.append("_");
+          outfilename.append(timeString);
+        }
         outfilename.append(".data");
 
         outfile.open(outfilename, std::ios::out | std::ios::trunc);
@@ -173,6 +194,7 @@ void transient(int argc, char** argv)
           outfile << current_entry.first.first << " " << current_entry.first.second << " " << current_entry.second << std::endl;
         }
         outfile.close();
+        remove(timefilename.c_str());
       }
     }
   }
@@ -198,7 +220,7 @@ void printParameters(int argc, char** argv)
   using ParameterList   = Traits::ParameterList;
   using ParameterField  = typename ParameterList::SubRandomField;
 
-  Traits   modelTraits(helper,config);  //this will also read in the electrode configuration file
+  Traits   modelTraits(helper,config,false);  //this will also read in the electrode configuration file
   std::shared_ptr<ParameterList>  parameterList  (new ParameterList(config.template get<std::string>("fields.location")));
   std::shared_ptr<ParameterField> conductivityField;
   conductivityField = (*parameterList).get(argv[2]);
@@ -242,7 +264,7 @@ int main(int argc, char** argv)
 {
   try
   {
-    if (argc==1)
+    if (argc==1 || std::string(argv[1]) == "--basepotential")
       transient(argc,argv); // try to run the problem
     else if (std::string(argv[1]) == "--print")
       printParameters(argc,argv);
@@ -251,6 +273,7 @@ int main(int argc, char** argv)
     else
       std::cout << "Possible options: \n"
       << "      (no option) -> run dune-ftg model\n"
+      << "      --basepotential -> run dune-ftg model, but only the electrical base potential will be evaluated; therefore adjust the modelling.ini to equal time steps\n"
       << "      --print [field] -> print parameter field as VTK\n"
       << "      --logprint [field] -> print log of  parameter field as VTK\n"
       << std::endl;

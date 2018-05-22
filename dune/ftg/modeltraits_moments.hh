@@ -503,7 +503,7 @@ class ModelTraits
 struct ModelTypes
 {
   struct Groundwater {};
-  struct Moments_c0 {};
+  struct Moments_c {};
   //struct Geoelectrics {};
 };
 

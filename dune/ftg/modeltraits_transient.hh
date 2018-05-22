@@ -173,10 +173,12 @@ class ModelTraits
     const Dune::ParameterTree& duneConfig;
     const GridHelper<GridTraits> gh;
 
+    bool basePotentialEvaluation;  
+
     typename GridTraits::Grid yaspGrid;
 
-    ModelTraits(Dune::MPIHelper& helper_, Dune::ParameterTree& duneConfig_)
-      : helper(helper_), duneConfig(duneConfig_), gh(duneConfig),
+    ModelTraits(Dune::MPIHelper& helper_, Dune::ParameterTree& duneConfig_, bool basePotentialEvaluation_)
+      : helper(helper_), duneConfig(duneConfig_), gh(duneConfig), basePotentialEvaluation(basePotentialEvaluation_),
       yaspGrid(gh.coords(),gh.B(),1)
     {
     }
@@ -376,12 +378,6 @@ class ModelTraits
         : traits(traits_)
       {}
 
-      //struct SubMeasurements
-      //{
-
-        
-        //bool printToFile = false;
-
         void setTimes(const RF& one, const RF& two)
         {}
 
@@ -470,8 +466,14 @@ class ModelTraits
             std::ofstream outfile;
             std::string filename;
             filename.append(filenamebase);
-            filename.append("_");
-            filename.append(timeString);
+            if (traits.basePotentialEvaluation)
+            {
+              filename.append("_base");
+            } else
+            {
+              filename.append("_");
+              filename.append(timeString);
+            }
             filename.append("_");
             filename.append(rank);
             filename.append(".data");

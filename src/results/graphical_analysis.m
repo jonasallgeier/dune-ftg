@@ -118,13 +118,21 @@ for j = 1:length(times)
     for i = 1:size(data.data,1)
         data3d(data.data(i,1),data.data(i,2),j) = data.data(i,3);
     end
-    textprogressbar(100*j/length(times));
+    textprogressbar(100*j/(length(times)+1));
 end
 
 
+basedata = NaN(no_electrodes,no_electrodes);
+filename = strcat(answer{5},'_base.data');
+data = importdata(filename);
+for i = 1:size(data.data,1)
+    basedata(data.data(i,1),data.data(i,2)) = data.data(i,3);
+end
+textprogressbar(100);
 
 %handles.data3d = reshape(data,arraySize);
 handles.data3d = data3d;
+handles.basedata = basedata;
 handles.times = times;
 % Choose default command line output for graphical_analysis
 handles.output = hObject;
@@ -372,9 +380,14 @@ N = str2double(get(handles.N_electrode,'String'));
 B = str2double(get(handles.B_electrode,'String'));
 axes(handles.axes1);
 handles.current_ts=diff(handles.data3d(A,[M N],:)-handles.data3d(B,[M N],:));
+handles.current_base=diff(handles.basedata(A,[M N])-handles.basedata(B,[M N]));
+
 %timevector = datetime(datevec(seconds(handles.times)));
 timevector = hours(handles.times/3600);
-plot(timevector,reshape(handles.current_ts,[1,size(handles.current_ts,3)]),'kx-');
+hold off
+plot(timevector,reshape(handles.current_ts,[1,size(handles.current_ts,3)]),'kx-');%,'LineWidth',2);
+hold on
+plot([timevector(1),timevector(end)],[handles.current_base handles.current_base],'k--');%,'LineWidth',2);
 %xlim([0 handles.times]);
 grid on;
 ylabel('\Delta\phi in V');
@@ -384,7 +397,7 @@ xtickformat('hh:mm')
 xticks(6*floor(timevector(1)/6,'hours'):hours(6):6*ceil(timevector(end)/6,'hours'))
 set(handles.axes1,'XMinorTick','on','YMinorTick','on')
 handles.axes1.XAxis.MinorTickValues = [6*floor(timevector(1)/6,'hours'):hours(1):6*ceil(timevector(end)/6,'hours')];
-set(gca,'FontName','LM Roman 10','FontWeight','bold')
+set(gca,'FontName','LM Roman 10','FontWeight','bold');%,'Color','none','FontSize',17)
 
 axes(handles.axes5);
 hold off
@@ -414,7 +427,7 @@ xlabel('x in m');
 ylabel('y in m');
 view([-16 72]);
 legend([A,M,N,B],'A','M','N','B','Location','best');
-set(gca,'FontName','LM Roman 10','FontWeight','bold');
+set(gca,'FontName','LM Roman 10','FontWeight','bold');%,'Color','none','FontSize',13)
 end
 
 

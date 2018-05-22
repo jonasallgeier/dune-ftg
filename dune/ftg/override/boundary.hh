@@ -1,3 +1,5 @@
+// -*- tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+// vi: set et ts=4 sw=2 sts=2:
 #ifndef DUNE_MODELLING_BOUNDARY_HH
 #define	DUNE_MODELLING_BOUNDARY_HH
 
@@ -155,13 +157,15 @@ namespace Dune {
           
 	  std::string temporaryname = name;
           temporaryname.erase (temporaryname.begin()+12, temporaryname.end());
-          if (temporaryname=="geoelectrics")
+          if (temporaryname=="geoelectrics") // if we have an automatically generated geoelectrics model, use the same boundary file for all of them
           {
             parser.readINITree("boundary.geoelectrics",boundaryConfig);
-          }
-          else
-          {		
-            parser.readINITree("boundary."+name,boundaryConfig);
+          } else {
+            temporaryname.erase (temporaryname.begin()+9, temporaryname.end());
+            if (temporaryname=="moments_c") // if we have an automatically generated concentration moments model, use the same boundary file for all of them
+              parser.readINITree("boundary.moments_c",boundaryConfig);
+            else
+              parser.readINITree("boundary."+name,boundaryConfig);
           }
           for (unsigned int i = 0; i < 2*dim; i++)
           {

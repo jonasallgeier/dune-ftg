@@ -49,7 +49,6 @@ namespace Dune {
           std::string model_name_temp = name;
           model_name_temp.erase(0,12); // get rid of "geoelectrics" to get the number n of the model "geoelectricsn"
           model_number = std::stoi(model_name_temp);
-
           electrode_cell_indx = traits.read_electrode_cell_indices()[model_number];
         }
 
@@ -92,20 +91,6 @@ namespace Dune {
          */
         void setMeasurementList(const std::shared_ptr<const MeasurementList>& list)
         {
-
-          //(*list).SubMearurements::printToFile = true;
-
-          //std::shared_ptr<SubMeasurements> geoelectric_Measurement(new SubMeasurements());
-          //(*geoelectric_Measurement).setTimes(1.00,2.44);
-
-          //auto test = (*list).get("geoelectrics");
-
-          //traits.MeasurementList.SubMeasurements.setTimes();
-          // measurements missing
-          //std::cout << "this is the setMeasurementList method of the geoelectrics model" << std::endl;
-          //(*forwardStorage).value(time,elem,x,localConcentration);
-          //(*list).get("geoelectrics").extract((*forwardStorage),0,1000);
-          //auto mysub = (*list).get("geoelectrics");
         }
 
         RF timestep() const
@@ -159,6 +144,8 @@ namespace Dune {
             (*sigma_bgField).evaluate(elem,x,sigma_bg);           
 
             //transform concentration to an electric conductivity
+            if (traits.basePotentialEvaluation)
+              return sigma_bg[0];
             return (*transportParams).concentration(elem,x,time)*kappa[0]+sigma_bg[0];
           }
 

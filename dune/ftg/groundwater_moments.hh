@@ -10,7 +10,7 @@
 
 #include<dune/modelling/fluxreconstruction.hh>
 #include<dune/modelling/solutionstorage.hh>
-#include<dune/modelling/solvers.hh>
+#include<dune/ftg/override/solvers.hh>
 
 namespace Dune {
   namespace Modelling {
@@ -218,7 +218,7 @@ namespace Dune {
          */
         void registerModel(
             const std::string& name,
-            const std::shared_ptr<ModelParameters<Traits,ModelTypes::Moments_c0> >& otherParams
+            const std::shared_ptr<ModelParameters<Traits,ModelTypes::Moments_c> >& otherParams
             )
         {
           // only needed for adjoint

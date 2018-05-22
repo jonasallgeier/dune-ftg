@@ -19,7 +19,7 @@
 
 #include<dune/ftg/modeltraits_moments.hh>
 #include<dune/ftg/groundwater_moments.hh>
-#include<dune/ftg/moments_c0.hh>
+#include<dune/ftg/moments_c.hh>
 #include<dune/ftg/ftg.hh>
 #include<dune/pdelab/function/callableadapter.hh>
 
@@ -48,11 +48,29 @@ void moments(int argc, char** argv)
   
   // define forward models for groundwater and transport
   using GroundwaterModel  = ForwardModel<ModelTraits,ModelTypes::Groundwater, Formulation::Stationary>;
-  using Moments_c0_Model    = ForwardModel<ModelTraits,ModelTypes::Moments_c0,Formulation::Stationary>;
+  using Moments_c_Model    = ForwardModel<ModelTraits,ModelTypes::Moments_c,Formulation::Stationary>;
 
-  // insert groundwater and transport model into forward model list
+  // insert groundwater and transport models into forward model list
   forwardModelList.add<GroundwaterModel>("groundwater");
-  forwardModelList.add<Moments_c0_Model,GroundwaterModel>("moments_c0",std::list<std::string>{"groundwater"});
+  //forwardModelList.add<Moments_c_Model,GroundwaterModel>("moments_c",std::list<std::string>{"groundwater"});
+  
+  unsigned int highest_moment = config.template get<unsigned int>("moments.highest");
+  for (unsigned int i = 0; i <= highest_moment; i++)
+  {
+    std::string model_name = "moments_c";
+    model_name += std::to_string(i); //name for the k-th model is moments_ck
+    if (i == 0)
+    {
+      forwardModelList.add<Moments_c_Model,GroundwaterModel>(model_name,std::list<std::string>{"groundwater"}); //create a new transport moment model
+    }
+    else
+    {
+      std::string model_name_dependency = "moments_c";
+      model_name_dependency += std::to_string(i-1); // a moment model depends on the model below   
+      forwardModelList.add<Moments_c_Model,GroundwaterModel,Moments_c_Model>(model_name,std::list<std::string>{"groundwater",model_name_dependency}); //create a new transport moment model
+    }  
+  }
+
   
   set_electrodes<ModelTraits>(&modelTraits);
   set_wells<ModelTraits>(&modelTraits);
