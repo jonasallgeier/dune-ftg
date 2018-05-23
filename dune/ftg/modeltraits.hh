@@ -391,110 +391,213 @@ class ModelTraits
           return lastTime;
         }
 
+
         template<typename Storage>
-        void extract(const Storage& storage, const RF& firstTime, const RF& time, const unsigned int& modelNumber,const std::string& timeString, Dune::Timer&  printTimer)              
+        void extract(const Storage& storage, const RF& firstTime, const RF& time, const std::string & modelname, const unsigned int& modelNumber,const std::string& timeString, Dune::Timer&  printTimer)              
         {
-          std::vector<unsigned int> electrode_cells = traits.read_electrode_cell_indices();
-          const typename GridTraits::Domain x = {0.5, 0.5, 0.5}; // get value at cell center
-
-          //declare output map for this source electrode; [1:144]
-          std::map<unsigned int, RF> output_this_electrode;
-      
-          for (const auto & elem : elements (traits.grid().leafGridView()))
-          {
-            //check if this cell is a measurement cell/is multiple measurement cells --> get electrode numbers of current cell
-            unsigned int cell_index = index_set().index(elem);
-            std::vector<unsigned int> affected_electrodes; 
-            
-            auto lambda_compare = [cell_index](unsigned int n) { return (n==cell_index); };
-            
-            std::vector<unsigned int>::iterator it = std::find_if (electrode_cells.begin(), electrode_cells.end(), lambda_compare);
-            while ((electrode_cells.end()) != it) 
+        
+          // determine which modeltype we have and if the output is desired; could probably be performed using templates
+          bool writeGeoelectrics = traits.config().template get<bool>("output.writeGeoelectrics",false);
+          bool isGeoelectrics = (modelname.substr(0, 12).compare("geoelectrics") == 0);
+          bool writeTransport = traits.config().template get<bool>("output.writeTransport",false);
+          bool isTransport = (modelname.substr(0, 9).compare("transport") == 0);
+          
+          if (writeGeoelectrics && isGeoelectrics)
             {
-              affected_electrodes.push_back( distance(electrode_cells.begin(), it) );
-              it++;
-              it = std::find_if (it, electrode_cells.end(), lambda_compare);
-            }
+              std::vector<unsigned int> electrode_cells = traits.read_electrode_cell_indices();
+              const typename GridTraits::Domain x = {0.5, 0.5, 0.5}; // get value at cell center
 
-            // if there is one or more electrodes -> measure the potential & write output in output vector
-            if (affected_electrodes.size() > 0)
-            {
-              typename GridTraits::Scalar output = 0.0;  
-              (*storage).value(time,elem,x,output);
-              for(std::vector<unsigned int>::iterator iter = affected_electrodes.begin(); iter != affected_electrodes.end(); ++iter)
+              //declare output map for this source electrode; [1:144]
+              std::map<unsigned int, RF> output_this_electrode;
+          
+              for (const auto & elem : elements (traits.grid().leafGridView()))
               {
-                output_this_electrode.insert ( std::pair<unsigned int,RF>(*iter+1,output) );
+                //check if this cell is a measurement cell/is multiple measurement cells --> get electrode numbers of current cell
+                unsigned int cell_index = index_set().index(elem);
+                std::vector<unsigned int> affected_electrodes; 
+                
+                auto lambda_compare = [cell_index](unsigned int n) { return (n==cell_index); };
+                
+                std::vector<unsigned int>::iterator it = std::find_if (electrode_cells.begin(), electrode_cells.end(), lambda_compare);
+                while ((electrode_cells.end()) != it) 
+                {
+                  affected_electrodes.push_back( distance(electrode_cells.begin(), it) );
+                  it++;
+                  it = std::find_if (it, electrode_cells.end(), lambda_compare);
+                }
+
+                // if there is one or more electrodes -> measure the potential & write output in output vector
+                if (affected_electrodes.size() > 0)
+                {
+                  typename GridTraits::Scalar output = 0.0;  
+                  (*storage).value(time,elem,x,output);
+                  for(std::vector<unsigned int>::iterator iter = affected_electrodes.begin(); iter != affected_electrodes.end(); ++iter)
+                  {
+                    output_this_electrode.insert ( std::pair<unsigned int,RF>(*iter+1,output) );
+                  }
+                }
+              }
+              output_all_electrodes.insert(std::pair<unsigned int,std::map<unsigned int, RF> >(modelNumber+1,output_this_electrode));
+
+              // if this is the last geoelectrics model print output to file
+              if (modelNumber+1 == electrode_cells.size())
+              {
+                printTimer.start();
+                std::string filenamebase = traits.config().template get<std::string>("output.writeGeoelectricsFilename","results");
+                if (traits.rank() == 0)
+                {
+                  std::cout << "printing ERT results" << std::endl;
+
+                  // print the temporal information to a timefile
+                  std::ofstream timefile;
+                  std::string timefilename;
+                  timefilename.append(filenamebase);
+                  timefilename.append(".times");
+
+                  if (clearFiles)
+                  { 
+                    timefile.open(timefilename, std::ios::out | std::ios::trunc); // clear the file
+                    clearFiles = false;
+                    timefile << "electrodes " << electrode_cells.size() << std::endl;
+                    timefile << "processors " << traits.helper.size() << std::endl;
+                    timefile << "times";
+                  } else 
+                  {
+                    timefile.open(timefilename, std::ios::app); // append to file
+                  }
+                  timefile << " " << time;
+                  timefile.close();
+                }
+
+                std::stringstream ss;
+                ss << traits.rank();
+                std::string rank(ss.str());
+
+                std::ofstream outfile;
+                std::string filename;
+                filename.append(filenamebase);
+                if (traits.basePotentialEvaluation)
+                {
+                  filename.append("_base");
+                } else
+                {
+                  filename.append("_");
+                  filename.append(timeString);
+                }
+                filename.append("_");
+                filename.append(rank);
+                filename.append(".data");
+
+                outfile.open(filename, std::ios::out | std::ios::trunc);
+
+                outfile << "injected_el measured_el potential" << std::endl;
+
+                for (auto const & injection_electrode : output_all_electrodes)
+                {
+                  for (auto const & measurement_electrode : injection_electrode.second)
+                  {
+                    outfile << injection_electrode.first << " " << measurement_electrode.first << " " << measurement_electrode.second << std::endl;
+                  }
+                }
+                outfile.close();
+                output_all_electrodes.clear(); // reset local storage of all ERT measurements
+              
+                printTimer.stop();
               }
             }
-          }
-          output_all_electrodes.insert(std::pair<unsigned int,std::map<unsigned int, RF> >(modelNumber+1,output_this_electrode));
-
-          // if this is the last geoelectrics model print output to file
-          if (modelNumber+1 == electrode_cells.size())
-          {
-            printTimer.start();
-            std::string filenamebase = traits.config().template get<std::string>("output.writeGeoelectricsFilename","results");
-            if (traits.rank() == 0)
+          
+          RF current_time = time;
+          bool timeforTransport = (std::fmod(current_time, traits.config().template get<RF>("time.step_geoelectrics"))  == 0);
+          if (writeTransport && isTransport && timeforTransport)
             {
-              std::cout << "printing ERT results" << std::endl;
+              std::vector<unsigned int> electrode_cells = traits.read_electrode_cell_indices();
+              const typename GridTraits::Domain x = {0.5, 0.5, 0.5}; // get value at cell center
 
-              // print the temporal information to a timefile
-              std::ofstream timefile;
-              std::string timefilename;
-              timefilename.append(filenamebase);
-              timefilename.append(".times");
-
-              if (clearFiles)
-              { 
-                timefile.open(timefilename, std::ios::out | std::ios::trunc); // clear the file
-                clearFiles = false;
-                timefile << "electrodes " << electrode_cells.size() << std::endl;
-                timefile << "processors " << traits.helper.size() << std::endl;
-                timefile << "times";
-              } else 
+              //declare output map for this source electrode; [1:144]
+              std::map<unsigned int, RF> output_this_electrode;
+          
+              for (const auto & elem : elements (traits.grid().leafGridView()))
               {
-                timefile.open(timefilename, std::ios::app); // append to file
+                //check if this cell is a measurement cell/is multiple measurement cells --> get electrode numbers of current cell
+                unsigned int cell_index = index_set().index(elem);
+                std::vector<unsigned int> affected_electrodes; 
+                
+                auto lambda_compare = [cell_index](unsigned int n) { return (n==cell_index); };
+                
+                std::vector<unsigned int>::iterator it = std::find_if (electrode_cells.begin(), electrode_cells.end(), lambda_compare);
+                while ((electrode_cells.end()) != it) 
+                {
+                  affected_electrodes.push_back( distance(electrode_cells.begin(), it) );
+                  it++;
+                  it = std::find_if (it, electrode_cells.end(), lambda_compare);
+                }
+
+                // if there is one or more electrodes -> measure the potential & write output in output vector
+                if (affected_electrodes.size() > 0)
+                {
+                  typename GridTraits::Scalar output = 0.0;  
+                  (*storage).value(time,elem,x,output);
+                  for(std::vector<unsigned int>::iterator iter = affected_electrodes.begin(); iter != affected_electrodes.end(); ++iter)
+                  {
+                    output_this_electrode.insert ( std::pair<unsigned int,RF>(*iter+1,output) );
+                  }
+                }
               }
-              timefile << " " << time;
-              timefile.close();
-            }
+              
+              printTimer.start();
+              std::string filenamebase = traits.config().template get<std::string>("output.writeTransportFilename","results");
+              if (traits.rank() == 0)
+              {
+                std::cout << "printing concentration results" << std::endl;
 
-            std::stringstream ss;
-            ss << traits.rank();
-            std::string rank(ss.str());
+                // print the temporal information to a timefile
+                std::ofstream timefile;
+                std::string timefilename;
+                timefilename.append(filenamebase);
+                timefilename.append(".times");
 
-            std::ofstream outfile;
-            std::string filename;
-            filename.append(filenamebase);
-            if (traits.basePotentialEvaluation)
-            {
-              filename.append("_base");
-            } else
-            {
+                if (clearFiles)
+                { 
+                  timefile.open(timefilename, std::ios::out | std::ios::trunc); // clear the file
+                  clearFiles = false;
+                  timefile << "electrodes " << electrode_cells.size() << std::endl;
+                  timefile << "processors " << traits.helper.size() << std::endl;
+                  timefile << "times";
+                } else 
+                {
+                  timefile.open(timefilename, std::ios::app); // append to file
+                }
+                timefile << " " << time;
+                timefile.close();
+              }
+
+              std::stringstream ss;
+              ss << traits.rank();
+              std::string rank(ss.str());
+
+              std::ofstream outfile;
+              std::string filename;
+              filename.append(filenamebase);
               filename.append("_");
               filename.append(timeString);
-            }
-            filename.append("_");
-            filename.append(rank);
-            filename.append(".data");
+              filename.append("_");
+              filename.append(rank);
+              filename.append(".data");
 
-            outfile.open(filename, std::ios::out | std::ios::trunc);
+              outfile.open(filename, std::ios::out | std::ios::trunc);
 
-            outfile << "injected_el measured_el potential" << std::endl;
+              outfile << "electrode concentration" << std::endl;
 
-            for (auto const & injection_electrode : output_all_electrodes)
-            {
-              for (auto const & measurement_electrode : injection_electrode.second)
+              for (auto const & electrode : output_this_electrode)
               {
-                outfile << injection_electrode.first << " " << measurement_electrode.first << " " << measurement_electrode.second << std::endl;
+                outfile << electrode.first << " " << electrode.second << std::endl;
               }
+              outfile.close();
+              output_all_electrodes.clear(); // reset local storage of all ERT measurements
+            
+              printTimer.stop();
             }
-            outfile.close();
-            output_all_electrodes.clear(); // reset local storage of all ERT measurements
-          
-            printTimer.stop();
-          }
-      };
+      }; 
     };
 };
 
@@ -507,6 +610,7 @@ struct ModelTypes
   struct Groundwater {};
   struct Transport {};
   struct Geoelectrics {};
+  struct Moments_c {};
 };
 
 

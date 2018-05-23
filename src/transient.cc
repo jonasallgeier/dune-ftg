@@ -17,7 +17,7 @@
 #include<dune/modelling/forwardmodel.hh>
 #include<dune/modelling/forwardadjointmodel.hh>
 
-#include<dune/ftg/modeltraits_transient.hh>
+#include<dune/ftg/modeltraits.hh>
 #include<dune/ftg/groundwater.hh>
 #include<dune/ftg/transport.hh>
 #include<dune/ftg/geoelectrics.hh>
@@ -26,7 +26,7 @@
 
 using namespace Dune::Modelling;
 
-void transient(int argc, char** argv)
+void transient(int argc, char** argv, bool evaluateBasePotentials)
 {
   Dune::Timer totalTimer;
   totalTimer.start();
@@ -41,16 +41,10 @@ void transient(int argc, char** argv)
    
   // use double for coordinates and values, dim = 3;
   using ModelTraits = ModelTraits<double,double,3>;
-  
-  bool evaluateBasePotentials;
-  if (std::string(argv[1]) == "--basepotential")
-    evaluateBasePotentials = true;
-  else
-    evaluateBasePotentials = false;
 
   ModelTraits   modelTraits(helper,config,evaluateBasePotentials);  //this will also read in the electrode configuration file
-    
-  // define forward model
+  
+// define forward model
   using ForwardModelList = ForwardModelList<ModelTraits>;
   ForwardModelList   forwardModelList(modelTraits);
   
@@ -96,107 +90,8 @@ void transient(int argc, char** argv)
   
   if (helper.rank()== 0 && modelTraits.config().template get<bool>("output.unify_parallel_results",false))
   {
-    std::string filenamebase = modelTraits.config().template get<std::string>("output.writeGeoelectricsFilename","results");
-    
-    std::string timefilename;
-    timefilename.append(filenamebase);
-    timefilename.append(".times");          
-    
-    std::string temp;
-
-    std::ifstream timefile(timefilename);
-    unsigned int no_electrodes;
-    unsigned int no_processors;
-    timefile >> temp;
-    timefile >> no_electrodes;
-    timefile >> temp;
-    timefile >> no_processors;
-    timefile >> temp;
-
-    std::string time;
-    std::vector<std::string> times;
-    while ( !timefile.eof() )
-    {
-      timefile >> time;
-      times.push_back(time);
-    }
-    using RF  = ModelTraits::GridTraits::RangeField;
-
-    for (auto const& timeString: times) 
-    {
-      std::map<std::pair<unsigned int, unsigned int>, RF > complete_map; // <injection electrode, <measured electrode, potential> > 
-    
-      for( unsigned int proc = 0; proc < no_processors; ++proc ) 
-      {
-        std::string infilename;
-        infilename.append(filenamebase);
-
-        if (modelTraits.basePotentialEvaluation)
-        {
-          infilename.append("_base");
-        } else
-        {
-          infilename.append("_");
-          infilename.append(timeString);
-        }
-
-        infilename.append("_");
-        std::stringstream ss;
-        ss << proc;
-        std::string rank(ss.str());
-        infilename.append(rank);
-        infilename.append(".data");
-
-
-        std::ifstream infile(infilename);
-
-        //skip header line
-        infile >> temp;
-        infile >> temp;
-        infile >> temp;
-
-        unsigned int injection_electrode;
-        unsigned int measured_electrode;
-        RF potential;
-
-        while ( !infile.eof() )
-        {
-          infile >> injection_electrode;
-          infile >> measured_electrode;
-          infile >> potential;
-
-          std::pair<unsigned int, unsigned int> tmp_pair;
-          tmp_pair = std::make_pair(injection_electrode,measured_electrode);
-
-          complete_map.insert(std::pair<std::pair<unsigned int, unsigned int>, RF >(tmp_pair, potential));
-        }
-        infile.close();
-        remove(infilename.c_str());
-        
-        std::ofstream outfile;
-        std::string outfilename;
-        outfilename.append(filenamebase);
-        if (modelTraits.basePotentialEvaluation)
-        {
-          outfilename.append("_base");
-        } else
-        { 
-          outfilename.append("_");
-          outfilename.append(timeString);
-        }
-        outfilename.append(".data");
-
-        outfile.open(outfilename, std::ios::out | std::ios::trunc);
-        outfile << "injected_el measured_el potential" << std::endl;
-
-        for (auto const & current_entry : complete_map)
-        {
-          outfile << current_entry.first.first << " " << current_entry.first.second << " " << current_entry.second << std::endl;
-        }
-        outfile.close();
-        remove(timefilename.c_str());
-      }
-    }
+    unify_geoelectrics_results<ModelTraits>(&modelTraits);
+    unify_transport_results<ModelTraits>(&modelTraits);
   }
 
 }
@@ -264,8 +159,10 @@ int main(int argc, char** argv)
 {
   try
   {
-    if (argc==1 || std::string(argv[1]) == "--basepotential")
-      transient(argc,argv); // try to run the problem
+    if (argc==1)
+      transient(argc,argv,false); // try to run the problem
+    else if (std::string(argv[1]) == "--basepotential")
+      transient(argc,argv,true);
     else if (std::string(argv[1]) == "--print")
       printParameters(argc,argv);
     else if (std::string(argv[1]) == "--logprint")

@@ -345,13 +345,10 @@ namespace Dune {
            */
           void extractMeasurements()
           {
-            if (traits.config().template get<bool>("output.writeGeoelectrics",false) && (parameters.name().substr(0, 12).compare("geoelectrics") == 0))
-            {
-              std::stringstream ss;
-              ss << time;
-              std::string timeString(ss.str());
-              (*measurements).extract(storage,time - usedTimestep,time,parameters.model_number,timeString,printTimer);
-            }
+            std::stringstream ss;
+            ss << time;
+            std::string timeString(ss.str());
+            (*measurements).extract(storage,time - usedTimestep,time,parameters.name(),parameters.model_number,timeString,printTimer);
           }
 
           /**

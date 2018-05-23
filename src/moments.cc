@@ -17,8 +17,8 @@
 #include<dune/modelling/forwardmodel.hh>
 #include<dune/modelling/forwardadjointmodel.hh>
 
-#include<dune/ftg/modeltraits_moments.hh>
-#include<dune/ftg/groundwater_moments.hh>
+#include<dune/ftg/modeltraits.hh>
+#include<dune/ftg/groundwater.hh>
 #include<dune/ftg/moments_c.hh>
 #include<dune/ftg/ftg.hh>
 #include<dune/pdelab/function/callableadapter.hh>
@@ -40,7 +40,7 @@ void moments(int argc, char** argv)
    
   // use double for coordinates and values, dim = 3;
   using ModelTraits = ModelTraits<double,double,3>;
-  ModelTraits   modelTraits(helper,config);  //this will also read in the electrode configuration file
+  ModelTraits   modelTraits(helper,config,false);  //this will also read in the electrode configuration file
 
   // define forward model
   using ForwardModelList = ForwardModelList<ModelTraits>;

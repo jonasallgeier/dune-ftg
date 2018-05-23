@@ -234,6 +234,14 @@ namespace Dune {
           // only needed for adjoint
         }
 
+	void registerModel(
+            const std::string& name,
+            const std::shared_ptr<ModelParameters<Traits,ModelTypes::Moments_c> >& otherParams
+            )
+        {
+          // only needed for adjoint
+        }
+
         auto& index_set() const
         {
           return traits.grid().leafGridView().indexSet();

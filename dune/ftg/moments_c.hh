@@ -10,7 +10,7 @@
 
 #include<dune/modelling/fluxreconstruction.hh>
 #include<dune/modelling/solutionstorage.hh>
-#include<dune/ftg/override/solvers.hh>
+#include<dune/ftg/override/solvers_moments.hh>
 
 namespace Dune {
   namespace Modelling {
@@ -152,10 +152,11 @@ namespace Dune {
         /**
          * @brief Constant for diffusive flux contribution
          */
-        template<typename Element, typename Domain, typename Time>
-          RF diffusion (const Element& elem, const Domain& x, const Time& t) const
+        RF diffusion (const RF& v) const
           {
-            return traits.config().template get<RF>("parameters.diffusion");
+            RF dispersivity = traits.config().template get<RF>("parameters.dispersivity");
+            RF molecular_D = traits.config().template get<RF>("parameters.molecular_D");
+            return fabs(v)*dispersivity+molecular_D;
           }
 
         /**
@@ -680,10 +681,10 @@ namespace Dune {
               {
                 const Domain& cellCenterInside = referenceElement(is.inside().geometry()).position(0,0);
                 const RF boundaryFlux = boundary.j(is,faceCenterLocal,time);
-                const RF D_inside = parameters.diffusion(is.inside(),cellCenterInside,time);
                 typename Traits::GridTraits::Scalar innerValue;
                 (*scalar).evaluate(is.inside(), cellCenterInside,innerValue);
                 const RF v = adjointSign * parameters.vNormal(is,faceCenterLocal,time);
+                const RF D_inside = parameters.diffusion(v);
                 // revert flux computation to obtain gradient on boundary
                 return - (boundaryFlux - v * innerValue[0]) / D_inside;
               }
@@ -715,8 +716,8 @@ namespace Dune {
           {
             // geometry information
             const IDomain& faceCenterLocal  = referenceElement(is.geometry()).position(0,0);
-            const Domain& cellCenterInside  = referenceElement(is.inside() .geometry()).position(0,0);
-            const Domain& cellCenterOutside = referenceElement(is.outside().geometry()).position(0,0);
+            //const Domain& cellCenterInside  = referenceElement(is.inside() .geometry()).position(0,0);
+            //const Domain& cellCenterOutside = referenceElement(is.outside().geometry()).position(0,0);
 
             // advection velocity
             const RF v = adjointSign * parameters.vNormal(is,faceCenterLocal,time);
@@ -725,8 +726,8 @@ namespace Dune {
             const RF upwindValue = (v >= 0) ? innerValue : outerValue;
 
             // conductivity
-            const RF D_inside  = parameters.diffusion(is.inside(), cellCenterInside, time);
-            const RF D_outside = parameters.diffusion(is.outside(),cellCenterOutside,time);
+            const RF D_inside  = parameters.diffusion(v);
+            const RF D_outside = parameters.diffusion(v);
             const RF D = havg(D_inside,D_outside);
 
             return v * upwindValue - D * skeletonNormalDerivative(is,innerValue,outerValue);
@@ -759,7 +760,7 @@ namespace Dune {
           {
             // geometry information
             const IDomain& faceCenterLocal  = referenceElement(is.geometry()).position(0,0);
-            const Domain&  cellCenterInside = referenceElement(is.inside().geometry()).position(0,0);
+            //const Domain&  cellCenterInside = referenceElement(is.inside().geometry()).position(0,0);
             
             // advection velocity
             const RF v = parameters.vNormal(is,faceCenterLocal,time);
@@ -768,7 +769,7 @@ namespace Dune {
             const RF upwindValue = (v >= 0) ? innerValue : boundary.g(is,faceCenterLocal,time);
 
             // diagonal diffusion tensor
-            const RF D_inside = parameters.diffusion(is.inside(),cellCenterInside,time);
+            const RF D_inside = parameters.diffusion(v);
 
             return v * upwindValue - D_inside * dirichletNormalDerivative(is,innerValue,time);
           }
