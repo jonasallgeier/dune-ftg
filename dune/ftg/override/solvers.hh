@@ -14,7 +14,7 @@ namespace Dune {
      * @brief Solver for stationary linear PDEs
      */
     template<typename Traits, typename ModelType, typename DirectionType>
-      class StationaryLinearSolver
+      class StationaryLinearSolver_CG_AMG_SSOR
       {
         private:
 
@@ -56,7 +56,7 @@ namespace Dune {
           /**
            * @brief Constructor
            */
-          StationaryLinearSolver(
+          StationaryLinearSolver_CG_AMG_SSOR(
               const Traits& traits,
               const EquationTraits<Traits,ModelType,DirectionType>& equationTraits_,
               const C& cg,
@@ -68,6 +68,85 @@ namespace Dune {
             p0fem(Dune::GeometryType(Dune::GeometryType::cube,Traits::GridTraits::dim)),
             p0gfs(equationTraits.gfs().gridView(),p0fem),
             ls(equationTraits.gfs(),5000,0,false,true) // max_iter, verbose, reuse, superLU
+        {}
+
+          /**
+           * @brief Compute solution (since problem is stationary)
+           */
+          unsigned int step(RF time, RF timestep, GridVector& oldSolution, GridVector& solution)
+          {
+            GridVector residual(equationTraits.gfs(),0.);
+            lop.setTime(time+timestep);
+
+            go.residual(solution, residual);
+            m = 0.;
+            go.jacobian(solution,m);
+            GridVector z(equationTraits.gfs(),0.);
+            ls.apply(m,z,residual,1e-10);
+            solution -= z;
+
+            return 1;
+          }
+      };
+
+    /**
+     * @brief Solver for stationary linear PDEs
+     */
+    template<typename Traits, typename ModelType, typename DirectionType>
+      class StationaryLinearSolver_BCGS_AMG_ILU0
+      {
+        private:
+
+          using RF = typename Traits::GridTraits::RangeField;
+          using DF = typename Traits::GridTraits::DomainField;
+
+          using DiscType   = typename EquationTraits<Traits,ModelType,DirectionType>::DiscretizationType;
+          using GFS        = typename EquationTraits<Traits,ModelType,DirectionType>::GridFunctionSpace;
+          using GridVector = typename EquationTraits<Traits,ModelType,DirectionType>::GridVector;
+          using C          = typename GFS::template ConstraintsContainer<RF>::Type;
+
+          using LOP = SpatialOperator<Traits,ModelType,DiscType,DirectionType>;
+
+          using MBE = Dune::PDELab::istl::BCRSMatrixBackend<>;
+          using GO  = Dune::PDELab::GridOperator<GFS,GFS,LOP,MBE,DF,RF,RF,C,C>;
+          using M   = typename GO::template MatrixContainer<RF>::Type;
+
+          using P0FEM = Dune::PDELab::P0LocalFiniteElementMap<DF,RF,Traits::GridTraits::dim>;
+          using P0VBE = Dune::PDELab::istl::VectorBackend<Dune::PDELab::istl::Blocking::fixed,1>;
+          using P0CON = Dune::PDELab::P0ParallelConstraints;
+          using P0GFS = Dune::PDELab::GridFunctionSpace<typename Traits::GridTraits::GridView,P0FEM,P0CON,P0VBE>;
+          using P0C   = typename P0GFS::template ConstraintsContainer<RF>::Type;
+          using LS    = Dune::PDELab::ISTLBackend_BCGS_AMG_ILU0<GO>; // ISTLBackend_BCGS_AMG_ILU0/ISTLBackend_CG_AMG_SSOR
+
+          const EquationTraits<Traits,ModelType,DirectionType>& equationTraits;
+          LOP   lop;
+
+          MBE   mbe;
+          GO    go;
+          M     m;
+
+          P0FEM p0fem;
+          P0GFS p0gfs;
+          P0C   p0cg;
+          LS    ls;
+
+        public:
+
+          /**
+           * @brief Constructor
+           */
+          StationaryLinearSolver_BCGS_AMG_ILU0(
+              const Traits& traits,
+              const EquationTraits<Traits,ModelType,DirectionType>& equationTraits_,
+              const C& cg,
+              const ModelParameters<Traits,ModelType>& parameters,
+              RF Tend
+              )
+            : equationTraits(equationTraits_), lop(traits,parameters), mbe(9),
+            go(equationTraits.gfs(),cg,equationTraits.gfs(),cg,lop,mbe), m(go),
+            p0fem(Dune::GeometryType(Dune::GeometryType::cube,Traits::GridTraits::dim)),
+            p0gfs(equationTraits.gfs().gridView(),p0fem),
+            ls(equationTraits.gfs(),5000,1,false,true) // max_iter, verbose, reuse, superLU
         {}
 
           /**

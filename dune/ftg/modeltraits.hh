@@ -112,7 +112,6 @@ class GridHelper
     }
     return output;
   }
-  
 
   std::array<int,dim> N() const
   {
@@ -156,14 +155,6 @@ class ModelTraits
       using IDomain      = Dune::FieldVector<DF,dim-1>;
       using Element      = typename GridView::Traits::template Codim<0>::Entity;
       using Intersection = typename GridView::Intersection;
-    };
-
-
-
-    // dummy implementation
-    struct SensitivityList
-    {
-
     };
 
     // use a list of random Gaussian fields as parameter list
@@ -392,11 +383,9 @@ class ModelTraits
           return lastTime;
         }
 
-
         template<typename Storage>
         void extract(const Storage& storage, const RF& firstTime, const RF& time, const std::string & modelname, const unsigned int& modelNumber,const std::string& timeString, Dune::Timer&  printTimer)              
         {
-        
           // determine which modeltype we have and if the output is desired; could probably be performed using templates
           bool writeGeoelectrics = traits.config().template get<bool>("output.writeGeoelectrics",false);
           bool isGeoelectrics = (modelname.substr(0, 12).compare("geoelectrics") == 0);
@@ -601,7 +590,6 @@ class ModelTraits
     };
 };
 
-
 /**
  * @brief Tags for existing model types
  */
@@ -611,6 +599,7 @@ struct ModelTypes
   struct Transport {};
   struct Geoelectrics {};
   struct Moments_c {};
+  struct Moments_ERT {};
 };
 
 

@@ -10,7 +10,7 @@
 
 #include<dune/modelling/fluxreconstruction.hh>
 #include<dune/modelling/solutionstorage.hh>
-#include<dune/ftg/override/solvers_moments.hh>
+#include<dune/ftg/override/solvers.hh>
 
 namespace Dune {
   namespace Modelling {
@@ -44,9 +44,11 @@ namespace Dune {
           : ModelParametersBase<Traits>(name), traits(traits_)
         {
           // access the name of the model to know which moment has to be calculated
+          std::string model_name = name;
+          std::string common_base = "moments_c";
+          auto start_position_to_erase = model_name.find(common_base);
+          model_number = std::stoi(model_name.erase(start_position_to_erase, common_base.size())); 
           std::string model_name_temp = name;
-          model_name_temp.erase(0,9); // get rid of "moments_c" to get the number k of the model "moments_cn"
-          model_number = std::stoi(model_name_temp);
         }
 
         /**
@@ -92,7 +94,7 @@ namespace Dune {
 
         RF timestep() const
         {
-          return traits.config().template get<RF>("time.step_transport");
+          return traits.config().template get<RF>("time.end"); // use max time, because stationary
         }
 
         /**
@@ -125,7 +127,7 @@ namespace Dune {
             return output[0];
           }
 	
-	    /**
+	/**
          * @brief Concentration at given position;
          */
         template<typename Element, typename Domain, typename Time>
@@ -200,6 +202,13 @@ namespace Dune {
           momentParams = otherParams;
         }
 
+        void registerModel(
+            const std::string& name, 
+            const std::shared_ptr<ModelParameters<Traits,ModelTypes::Moments_ERT> >& otherParams
+            )
+        {
+        }
+
         auto& index_set() const
         {
           return traits.grid().leafGridView().indexSet();
@@ -239,7 +248,7 @@ namespace Dune {
           // use linear solver in stationary case,
           // explicit linear solver for transient case
           template<typename... T>
-            using StationarySolver = StationaryLinearSolver<T...>;
+            using StationarySolver = StationaryLinearSolver_BCGS_AMG_ILU0<T...>;
           template<typename... T>
             using TransientSolver  = ExplicitLinearSolver<T...>;
 
@@ -455,7 +464,7 @@ namespace Dune {
             {
               moment_contribution = 0;
             } else {
-              moment_contribution = - kth * parameters.moment_k_minus_one(eg.entity(),cellCenterLocal,time);
+              moment_contribution = - kth * parameters.moment_k_minus_one(eg.entity(),cellCenterLocal,time) * eg.geometry().volume();
             }
 
             r.accumulate(lfsv,0,source_term_contribution+moment_contribution);
@@ -856,7 +865,6 @@ namespace Dune {
         template<typename EG, typename LFSU, typename X, typename LFSV, typename R>
           void alpha_volume (const EG& eg, const LFSU& lfsu, const X& x, const LFSV& lfsv, R& r) const
           {
-            //r.accumulate(lfsv,0, adjointSign * x(lfsu,0) * eg.geometry().volume());
           }
 
         RF suggestTimestep (RF dt) const
@@ -865,34 +873,6 @@ namespace Dune {
         }
 
       };
-
-    /**
-     * @brief Class providing sensitivity computation for solute transport
-     */
-    template<typename Traits>
-      class SensitivityComp<Traits,ModelTypes::Moments_c>
-      {
-        public:
-
-          SensitivityComp(
-              const Traits& traits,
-              const ModelParameters<Traits,ModelTypes::Moments_c>& parameters
-              )
-          {}
-
-            void initialize(const std::shared_ptr<typename Traits::SensitivityList>& sensitivityList)
-            {
-            }
-
-            template<typename Time>
-            void extract(const Time& first, const Time& last)
-            {
-              std::cout << "(would extract sensitivity from " << first
-                << " to " << last << ")" << std::endl;
-            }
-
-      };
-
   }
 }
 

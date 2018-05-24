@@ -1,0 +1,503 @@
+// -*- tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+// vi: set et ts=4 sw=2 sts=2:
+#ifndef DUNE_FTG_MOMENTS_ERT_HH
+#define DUNE_FTG_MOMENTS_ERT_HH
+
+#include<dune/pdelab/common/referenceelements.hh>
+#include<dune/pdelab/finiteelementmap/p0fem.hh>
+#include<dune/pdelab/constraints/p0.hh>
+#include<dune/pdelab/backend/istl.hh>
+
+#include<dune/modelling/fluxreconstruction.hh>
+#include<dune/modelling/solutionstorage.hh>
+#include<dune/ftg/override/solvers.hh>
+
+namespace Dune {
+  namespace Modelling {
+
+    /**
+     * @brief Parameter class for the solute transport equation
+     */
+    template<typename Traits>
+      class ModelParameters<Traits, typename ModelTypes::Moments_ERT>
+      : public ModelParametersBase<Traits>
+      {
+        using RF = typename Traits::GridTraits::RangeField;
+
+        using ParameterList  = typename Traits::ParameterList;
+        using ParameterField = typename ParameterList::SubRandomField;
+
+        const Traits& traits;
+
+        std::shared_ptr<SolutionStorage<Traits,ModelTypes::Moments_ERT,Direction::Forward> > forwardStorage;
+        std::shared_ptr<SolutionStorage<Traits,ModelTypes::Moments_ERT,Direction::Adjoint> > adjointStorage;
+
+        std::shared_ptr<ParameterField> sigma_bgField;
+        std::shared_ptr<ParameterField> kappaField;
+
+        std::shared_ptr<const ModelParameters<Traits,ModelTypes::Moments_c> > c_momentParams;
+        std::shared_ptr<const ModelParameters<Traits,ModelTypes::Geoelectrics> > geoelectricsParams;
+
+        public:
+          unsigned int model_number = 0;
+          unsigned int k;
+
+        ModelParameters(const Traits& traits_, const std::string& name)
+          : ModelParametersBase<Traits>(name), traits(traits_)
+        {
+          std::string str = name;
+          std::stringstream ss; 
+          ss << str;
+          std::string temp;
+          
+          ss >> temp; // get rid of moments_ERT
+          ss >> temp; // get the moment number k
+          std::stringstream(temp) >> k;
+          ss >> temp; // get the ERT model number
+          std::stringstream(temp) >> model_number;
+        }
+
+        /**
+         * @brief Model parameters should exist only once per (named) model
+         */
+        ModelParameters(const ModelParameters& other) = delete;
+
+        /**
+         * @brief Set internal storage object for forward solution
+         */
+        void setStorage(
+            const std::shared_ptr<SolutionStorage<Traits,ModelTypes::Moments_ERT,Direction::Forward> > storage
+            )
+        {
+          forwardStorage = storage;
+        }
+
+        /**
+         * @brief Provide access to underlying parameter fields
+         */
+        void setParameterList(const std::shared_ptr<const typename Traits::ParameterList>& list)
+        {
+        }
+
+        /**
+         * @brief Provide access to measurement storage object
+         */
+        void setMeasurementList(const std::shared_ptr<const typename Traits::MeasurementList>& list)
+        {
+        }
+
+        RF timestep() const
+        {
+          return traits.config().template get<RF>("time.end"); // use max time, because stationary
+        }
+
+        /**
+         * @brief Minimum time stepsize accepted by model
+         */
+        RF minTimestep() const
+        {
+          return timestep();
+        }
+
+        /**
+         * @brief Maximum time stepsize accepted by model
+         */
+        RF maxTimestep() const
+        {
+          return timestep();
+        }
+
+        // electrical conductivity based on concentration transformation in each element
+        template<typename Element, typename Domain, typename Time>
+          RF sigma (const Element& elem, const Domain& x, const Time& time) const
+          {
+            if (!sigma_bgField)
+            {
+              std::cout << "ModelParameters::sigma " << this->name() << " " << this << std::endl;
+              DUNE_THROW(Dune::Exception,"sigma_bg field not set in geoelectrics model parameters");
+            }
+            typename Traits::GridTraits::Scalar sigma_bg;
+            (*sigma_bgField).evaluate(elem,x,sigma_bg);
+            return sigma_bg[0];
+          }
+
+        // electrical conductivity based on concentration transformation in each element
+        template<typename Element, typename Domain, typename Time>
+          RF kappa (const Element& elem, const Domain& x, const Time& time) const
+          {
+            if (!kappaField)
+            {
+              std::cout << "ModelParameters::kappa " << this->name() << " " << this << std::endl;
+              DUNE_THROW(Dune::Exception,"kappa field not set in geoelectrics model parameters");
+            }
+            typename Traits::GridTraits::Scalar kappa;
+            (*kappaField).evaluate(elem,x,kappa);
+            return kappa[0];
+          }
+
+        template<typename Element, typename Domain, typename Time>
+          RF c_moment(const Element& elem, const Domain& x, const Time& time) const
+          {
+            if (!c_momentParams)
+              DUNE_THROW(Dune::Exception,"moment k-1 model parameters not set in moment k model parameters");
+            
+            return (*c_momentParams).moment(elem,x,time);
+          }
+
+        template<typename Element, typename Domain, typename Time>
+          RF el_potential(const Element& elem, const Domain& x, const Time& time) const
+          {
+            if (!geoelectricsParams)
+              DUNE_THROW(Dune::Exception,"geoelectrics parameters not set in ERT moment model parameters");
+            
+            return (*geoelectricsParams).potential(elem,x,time);
+          }
+
+
+        /**
+         * @brief Make ModelParameters of different model available
+         */
+        void registerModel(
+            const std::string& name, 
+            const std::shared_ptr<ModelParameters<Traits,ModelTypes::Moments_c> >& otherParams
+            )
+        {
+          c_momentParams = otherParams;
+        }
+
+        void registerModel(
+            const std::string& name, 
+            const std::shared_ptr<ModelParameters<Traits,ModelTypes::Geoelectrics> >& otherParams
+            )
+        {
+          geoelectricsParams = otherParams;
+        }
+
+        auto& index_set() const
+        {
+          return traits.grid().leafGridView().indexSet();
+        };
+
+        std::map<unsigned int, std::pair<RF, bool>> well_cells() const
+        {
+          return traits.read_well_cells();
+        };
+      };
+
+    /**
+     * @brief Equation traits class for forward / adjoint solute transport equation
+     */
+    template<typename Traits, typename DirectionType>
+      class EquationTraits<Traits, typename ModelTypes::Moments_ERT, DirectionType>
+      {
+        public:
+
+          using GridTraits = typename Traits::GridTraits;
+
+          using GridView    = typename GridTraits::GridView;
+          using DomainField = typename GridTraits::DomainField;
+          using RangeField  = typename GridTraits::RangeField;
+
+          enum {dim = GridTraits::dim};
+
+          using FEM = Dune::PDELab::P0LocalFiniteElementMap<DomainField,RangeField,dim>;
+          using VBE = Dune::PDELab::istl::VectorBackend<Dune::PDELab::istl::Blocking::fixed,1>;
+          using CON = Dune::PDELab::P0ParallelConstraints;
+
+          using GridFunctionSpace = Dune::PDELab::GridFunctionSpace<GridView,FEM,CON,VBE>;
+          using GridVector        = typename Dune::PDELab::Backend::Vector<GridFunctionSpace,RangeField>;
+
+          using DiscretizationType = Discretization::CellCenteredFiniteVolume;
+
+          // use linear solver in stationary case,
+          // explicit linear solver for transient case
+          template<typename... T>
+            using StationarySolver = StationaryLinearSolver_BCGS_AMG_ILU0<T...>;
+          template<typename... T>
+            using TransientSolver  = ExplicitLinearSolver<T...>;
+
+          // use explicit Euler for timestepping
+          // alternative: Heun
+          using OneStepScheme = Dune::PDELab::ExplicitEulerParameter<RangeField>;
+
+          // use RT0 flux reconstruction
+          // alternatives: BDM1 and RT1
+          template<typename... T>
+            using FluxReconstruction = RT0Reconstruction<T...>;
+
+          // store complete space-time solution
+          // alternative: only store last two steps
+          template<typename... T>
+            using StorageContainer = LastTwoContainer<T...>;
+
+          // use previous timestep when interpolating stored solution
+          // alternatives: NextTimestep and LinearInterpolation
+          template<typename... T>
+            using TemporalInterpolation = PreviousTimestep<T...>;
+
+        private:
+
+          const FEM fem;
+          const GridFunctionSpace space;
+
+        public:
+
+          EquationTraits(const Traits& traits)
+            : fem(Dune::GeometryType(Dune::GeometryType::cube,dim)),
+            space(traits.grid().levelGridView(0),fem)
+          {
+            space.ordering();
+          }
+
+          const GridFunctionSpace& gfs() const
+          {
+            return space;
+          }
+
+      };
+
+    /**
+     * @brief Class representing initial condition for solute concentration
+     */
+    template<typename Traits>
+      class InitialValue<Traits, typename ModelTypes::Moments_ERT>
+      : public InitialValueBase<Traits,InitialValue<Traits,ModelTypes::Moments_ERT> >
+      {
+        public:
+          template<typename GV>
+            InitialValue(
+                const Traits& traits_,
+                const GV& gv,
+                const ModelParameters<Traits,ModelTypes::Moments_ERT>& parameters_
+                )
+            : InitialValueBase<Traits,InitialValue<Traits,ModelTypes::Moments_ERT> >(gv)
+            {}
+
+          template<typename Domain, typename Value>
+            void evaluateGlobal(const Domain& x, Value& y) const
+            {
+              // homogeneous initial/guess conditions
+              y= 0.0;
+            }
+      };
+
+    /**
+     * @brief Define transport equation as a differential equation
+     */
+    template<typename Traits, typename DomainType, typename DirectionType>
+      class Equation<Traits,ModelTypes::Moments_ERT,DomainType,DirectionType>
+      : public DifferentialEquation<Traits,ModelTypes::Moments_ERT,DomainType,DirectionType>
+      {
+        using DifferentialEquation<Traits,ModelTypes::Moments_ERT,DomainType,DirectionType>::DifferentialEquation;
+      };
+
+    /**
+     * @brief Spatial local operator of the convection-diffusion equation (CCFV version)
+     */
+    template<typename Traits, typename DirectionType>
+      class SpatialOperator<Traits, typename ModelTypes::Moments_ERT, Discretization::CellCenteredFiniteVolume, DirectionType>
+      : public Dune::PDELab::NumericalJacobianSkeleton
+      <SpatialOperator<Traits, ModelTypes::Moments_ERT, Discretization::CellCenteredFiniteVolume, DirectionType> >,
+      public Dune::PDELab::NumericalJacobianBoundary
+        <SpatialOperator<Traits, ModelTypes::Moments_ERT, Discretization::CellCenteredFiniteVolume, DirectionType> >,
+      public Dune::PDELab::NumericalJacobianVolume
+      <TemporalOperator<Traits, ModelTypes::Moments_ERT, Discretization::CellCenteredFiniteVolume, DirectionType> >,
+      public Dune::PDELab::FullSkeletonPattern, 
+      public Dune::PDELab::FullVolumePattern,
+      public Dune::PDELab::LocalOperatorDefaultFlags,
+      public Dune::PDELab::InstationaryLocalOperatorDefaultMethods<typename Traits::GridTraits::RangeField>
+      {
+        using GridTraits = typename Traits::GridTraits;
+
+        using RF      = typename GridTraits::RangeField;
+        using Domain  = typename GridTraits::Domain;
+        using IDomain = typename GridTraits::IDomain;
+
+        public:
+
+        // pattern assembly flags
+        enum {doPatternVolume   = true};
+        enum {doPatternSkeleton = true};
+
+        // residual assembly flags
+        enum {doAlphaVolume   = true};
+        enum {doAlphaSkeleton = true};
+        enum {doAlphaBoundary = true};
+
+        private:
+
+        const Traits& traits;
+
+        const ModelParameters<Traits,ModelTypes::Moments_ERT>&              parameters;
+        const Boundary       <Traits,ModelTypes::Moments_ERT,DirectionType> boundary;
+
+        typename Traits::GridTraits::Grid::LeafGridView  lgv;
+        std::map<unsigned int, std::pair<RF, bool>> well_cells;
+
+        RF time;
+        RF kth;
+
+        public:
+
+        /**
+         * @brief Constructor
+         */
+        SpatialOperator(
+            const Traits& traits_,
+            const ModelParameters<Traits,ModelTypes::Moments_ERT>& parameters_
+            )
+          : traits(traits_), parameters(parameters_), boundary(traits,parameters.name()), lgv(traits_.grid().leafGridView()) 
+        {
+          well_cells = parameters.well_cells();
+          kth = parameters.model_number;
+        }
+
+        /**
+         * @brief Volume integral depending on test and ansatz functions
+         */
+        template<typename EG, typename LFSU, typename X, typename LFSV, typename R>
+          void alpha_volume (const EG& eg, const LFSU& lfsu, const X& x, const LFSV& lfsv, R& r) const
+          {
+          }
+
+        /**
+         * @brief Skeleton integral depending on test and ansatz functions
+         */
+        // each face is only visited ONCE!
+        template<typename IG, typename LFSU, typename X, typename LFSV, typename R>
+          void alpha_skeleton (const IG& ig, 
+              const LFSU& lfsu_s, const X& x_s, const LFSV& lfsv_s,
+              const LFSU& lfsu_n, const X& x_n, const LFSV& lfsv_n, 
+              R& r_s, R& r_n) const
+          {
+            const RF faceVolume = ig.geometry().volume();
+            const Domain& cellCenterInside  = referenceElement(ig.inside() .geometry()).position(0,0);
+            const Domain& cellCenterOutside = referenceElement(ig.outside().geometry()).position(0,0);
+
+            const RF sigma_inside  = parameters.sigma(ig.inside(),cellCenterInside,time);
+            const RF sigma_outside = parameters.sigma(ig.outside(),cellCenterOutside,time);
+            const RF sigma_0 = havg(sigma_inside,sigma_outside);
+
+            RF left_part = faceVolume * sigma_0 * skeletonNormalDerivative(ig,x_s(lfsu_s,0),x_n(lfsu_n,0));
+
+            const RF c_moment_inside  = parameters.c_moment(ig.inside(),cellCenterInside,time);
+            const RF c_moment_outside = parameters.c_moment(ig.outside(),cellCenterOutside,time);
+            const RF c_moment = havg(c_moment_inside,c_moment_outside);
+
+            const RF kappa_inside  = parameters.kappa(ig.inside(),cellCenterInside,time);
+            const RF kappa_outside = parameters.kappa(ig.outside(),cellCenterOutside,time);
+            const RF kappa = havg(kappa_inside,kappa_outside);     
+
+            const RF potential_inside  = parameters.el_potential(ig.inside(),cellCenterInside,time);
+            const RF potential_outside = parameters.el_potential(ig.outside(),cellCenterOutside,time);
+
+            RF right_part = faceVolume * kappa * c_moment * skeletonNormalDerivative(ig,potential_inside,potential_outside);
+
+            r_s.accumulate(lfsv_s,0,  left_part );
+            r_n.accumulate(lfsv_n,0, -left_part );
+          }
+
+        /**
+         * @brief Boundary integral depending on test and ansatz functions
+         */
+        // We put the Dirichlet evaluation also in the alpha term to save some geometry evaluations
+        template<typename IG, typename LFSU, typename X, typename LFSV, typename R>
+          void alpha_boundary (const IG& ig, 
+              const LFSU& lfsu_s, const X& x_s, const LFSV& lfsv_s,
+              R& r_s) const
+          {
+          }
+
+        /**
+         * @brief Set time for subsequent evaluation
+         */
+        void setTime (const RF t)
+        {
+          time = t;
+        }
+
+        private:
+
+        /**
+         * @brief Derivative of solution in normal direction across interface
+         */
+        template<typename Intersection>
+          RF skeletonNormalDerivative(const Intersection& is, RF innerValue, RF outerValue) const
+          {
+            // geometry information
+            const RF faceVolume    = is          .geometry().volume();
+            const RF insideVolume  = is.inside() .geometry().volume();
+            const RF outsideVolume = is.outside().geometry().volume();
+
+            const RF distance = havg(insideVolume,outsideVolume)/faceVolume;
+
+            // approximation of gradient
+            const RF w = (outerValue - innerValue)/distance;
+
+            return w;
+          }
+
+        /**
+         * @brief Harmonic average
+         */
+        template<typename T>
+          T havg (T a, T b) const
+          {
+            T eps = 1e-30;
+            return 2./(1./(a + eps) + 1./(b + eps));
+          }
+      };
+
+    /**
+     * @brief Temporal local operator of the convection-diffusion equation (CCFV version)
+     */
+    template<typename Traits, typename DirectionType>
+      class TemporalOperator<Traits, typename ModelTypes::Moments_ERT,
+            Discretization::CellCenteredFiniteVolume, DirectionType>
+      : public Dune::PDELab::NumericalJacobianVolume
+      <TemporalOperator<Traits, ModelTypes::Moments_ERT, Discretization::CellCenteredFiniteVolume, DirectionType> >,
+      public Dune::PDELab::FullVolumePattern,
+      public Dune::PDELab::LocalOperatorDefaultFlags,
+      public Dune::PDELab::InstationaryLocalOperatorDefaultMethods<typename Traits::GridTraits::RangeField>
+
+      {
+        using RF = typename Traits::GridTraits::RangeField;
+
+        public:
+
+        // pattern assembly flags
+        enum {doPatternVolume = true};
+
+        // residual assembly flags
+        enum {doAlphaVolume = true};
+
+        private:
+
+        public:
+
+        /**
+         * @brief Constructor
+         */
+        TemporalOperator(
+            const Traits& traits,
+            const ModelParameters<Traits,ModelTypes::Moments_ERT>& parameters
+            ) 
+        {}
+
+        /**
+         * @brief Volume integral depending on test and ansatz functions
+         */
+        template<typename EG, typename LFSU, typename X, typename LFSV, typename R>
+          void alpha_volume (const EG& eg, const LFSU& lfsu, const X& x, const LFSV& lfsv, R& r) const
+          {}
+
+        RF suggestTimestep (RF dt) const
+        {
+          return std::numeric_limits<RF>::max();
+        }
+
+      };
+  }
+}
+
+#endif // DUNE_FTG_MOMENTS_ERT_HH

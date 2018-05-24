@@ -10,11 +10,10 @@
 
 #include<dune/modelling/fluxreconstruction.hh>
 #include<dune/modelling/solutionstorage.hh>
-#include<dune/modelling/solvers.hh>
+#include<dune/ftg/override/solvers.hh>
 
 namespace Dune {
   namespace Modelling {
-
     /**
      * @brief Parameter class for the groundwater flow equation
      */
@@ -23,7 +22,6 @@ namespace Dune {
       : public ModelParametersBase<Traits>
       {
         using RF = typename Traits::GridTraits::RangeField;
-
         using ParameterList   = typename Traits::ParameterList;
         using ParameterField  = typename ParameterList::SubRandomField;
         using MeasurementList = typename Traits::MeasurementList;
@@ -92,7 +90,7 @@ namespace Dune {
 
         RF timestep() const
         {
-          return traits.config().template get<RF>("time.step_flow");
+          return traits.config().template get<RF>("time.end");
         }
 
         /**
@@ -177,7 +175,7 @@ namespace Dune {
         /**
          * @brief Maximum water flux on element (for CFL condition)
          */
-          template<typename Element, typename Time>
+        template<typename Element, typename Time>
           RF maxFluxNorm(const Element& elem, const Time& time) const
           {
             RF output = 0.;
@@ -224,22 +222,27 @@ namespace Dune {
           }
 */
         /**
-         * @brief Make ModelParameters of different model available
+         * @brief Make ModelParameters of different model available && make this model available for the others!
          */
         void registerModel(
             const std::string& name,
             const std::shared_ptr<ModelParameters<Traits,ModelTypes::Transport> >& otherParams
             )
         {
-          // only needed for adjoint
         }
 
-	void registerModel(
+	    void registerModel(
             const std::string& name,
             const std::shared_ptr<ModelParameters<Traits,ModelTypes::Moments_c> >& otherParams
             )
         {
-          // only needed for adjoint
+        }
+
+	    void registerModel(
+            const std::string& name,
+            const std::shared_ptr<ModelParameters<Traits,ModelTypes::Moments_ERT> >& otherParams
+            )
+        {
         }
 
         auto& index_set() const
@@ -281,7 +284,7 @@ namespace Dune {
           // use linear solver in stationary case,
           // implicit linear solver for transient case
           template<typename... T>
-            using StationarySolver = StationaryLinearSolver<T...>;
+            using StationarySolver = StationaryLinearSolver_CG_AMG_SSOR<T...>;
           template<typename... T>
             using TransientSolver  = ImplicitLinearSolver<T...>;
 
@@ -798,34 +801,6 @@ namespace Dune {
           }
 
       };
-
-    /**
-     * @brief Class providing sensitivity computation for groundwater flow
-     */
-    template<typename Traits>
-      class SensitivityComp<Traits,ModelTypes::Groundwater>
-      {
-        public:
-
-          SensitivityComp(
-              const Traits& traits,
-              const ModelParameters<Traits,ModelTypes::Groundwater>& parameters
-              )
-          {}
-
-          void initialize(const std::shared_ptr<typename Traits::SensitivityList>& sensitivityList)
-          {
-          }
-
-          template<typename Time>
-            void extract(const Time& first, const Time& last)
-            {
-              std::cout << "(would extract sensitivity from " << first
-                << " to " << last << ")" << std::endl;
-            }
-
-      };
-
   }
 }
 

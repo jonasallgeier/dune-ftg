@@ -155,18 +155,24 @@ namespace Dune {
           Dune::ParameterTree boundaryConfig;
           Dune::ParameterTreeParser parser;
           
-	  std::string temporaryname = name;
-          temporaryname.erase (temporaryname.begin()+12, temporaryname.end());
-          if (temporaryname=="geoelectrics") // if we have an automatically generated geoelectrics model, use the same boundary file for all of them
+          // get boundary files; use one for all generated models!
+          if (name.find("geoelectrics") == 0)
           {
             parser.readINITree("boundary.geoelectrics",boundaryConfig);
-          } else {
-            temporaryname.erase (temporaryname.begin()+9, temporaryname.end());
-            if (temporaryname=="moments_c") // if we have an automatically generated concentration moments model, use the same boundary file for all of them
-              parser.readINITree("boundary.moments_c",boundaryConfig);
-            else
-              parser.readINITree("boundary."+name,boundaryConfig);
+          } 
+          else if (name.find("moments_c") == 0)
+          {
+            parser.readINITree("boundary.moments_c",boundaryConfig);
+          } 
+          else if (name.find("moments_ERT") == 0)
+          {
+            parser.readINITree("boundary.moments_ERT",boundaryConfig);
           }
+          else {
+              parser.readINITree("boundary."+name,boundaryConfig);
+          }            
+
+
           for (unsigned int i = 0; i < 2*dim; i++)
           {
             segmentVector.push_back(std::vector<BoundarySegment>());

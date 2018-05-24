@@ -10,7 +10,7 @@
 
 #include<dune/modelling/fluxreconstruction.hh>
 #include<dune/modelling/solutionstorage.hh>
-#include<dune/modelling/solvers.hh>
+#include<dune/ftg/override/solvers.hh>
 
 namespace Dune {
   namespace Modelling {
@@ -119,7 +119,7 @@ namespace Dune {
             return output[0];
           }
 	
-	/**
+        /**
          * @brief Concentration at given position;
          */
         template<typename Element, typename Domain, typename Time>
@@ -228,7 +228,7 @@ namespace Dune {
           // use linear solver in stationary case,
           // explicit linear solver for transient case
           template<typename... T>
-            using StationarySolver = StationaryLinearSolver<T...>;
+            using StationarySolver = StationaryLinearSolver_BCGS_AMG_ILU0<T...>;
           template<typename... T>
             using TransientSolver  = ExplicitLinearSolver<T...>;
 
@@ -835,34 +835,6 @@ namespace Dune {
         }
 
       };
-
-    /**
-     * @brief Class providing sensitivity computation for solute transport
-     */
-    template<typename Traits>
-      class SensitivityComp<Traits,ModelTypes::Transport>
-      {
-        public:
-
-          SensitivityComp(
-              const Traits& traits,
-              const ModelParameters<Traits,ModelTypes::Transport>& parameters
-              )
-          {}
-
-            void initialize(const std::shared_ptr<typename Traits::SensitivityList>& sensitivityList)
-            {
-            }
-
-            template<typename Time>
-            void extract(const Time& first, const Time& last)
-            {
-              std::cout << "(would extract sensitivity from " << first
-                << " to " << last << ")" << std::endl;
-            }
-
-      };
-
   }
 }
 

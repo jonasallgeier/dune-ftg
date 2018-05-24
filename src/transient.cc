@@ -44,7 +44,7 @@ void transient(int argc, char** argv, bool evaluateBasePotentials)
 
   ModelTraits   modelTraits(helper,config,evaluateBasePotentials);  //this will also read in the electrode configuration file
   
-// define forward model
+  // define forward model
   using ForwardModelList = ForwardModelList<ModelTraits>;
   ForwardModelList   forwardModelList(modelTraits);
   
@@ -64,10 +64,8 @@ void transient(int argc, char** argv, bool evaluateBasePotentials)
   std::stringstream temp_ss;
   for (int i = 0; i < modelTraits.electrodeconfiguration.no_electrodes; i++)
   {
-    temp_ss.str(std::string());
-    temp_ss.clear();
-    temp_ss << "geoelectrics" << i; //name for the n-th model is geoelectricsn
-    forwardModelList.add<GeoelectricsModel,TransportModel>(temp_ss.str(),std::list<std::string>{"transport"}); //create a new geoelectrics model
+    std::string name = "geoelectrics" + std::to_string(i); //name for the n-th model is geoelectricsn
+    forwardModelList.add<GeoelectricsModel,TransportModel>(name,std::list<std::string>{"transport"}); //create a new geoelectrics model
   }
   
   // print information about model list, avoid multiple outputs if run is parallel
@@ -90,8 +88,10 @@ void transient(int argc, char** argv, bool evaluateBasePotentials)
   
   if (helper.rank()== 0 && modelTraits.config().template get<bool>("output.unify_parallel_results",false))
   {
-    unify_geoelectrics_results<ModelTraits>(&modelTraits);
-    unify_transport_results<ModelTraits>(&modelTraits);
+    if (modelTraits.config().template get<bool>("output.writeGeoelectrics",false))
+      unify_geoelectrics_results<ModelTraits>(&modelTraits);
+    if (modelTraits.config().template get<bool>("output.writeTransport",false))
+      unify_transport_results<ModelTraits>(&modelTraits);
   }
 
 }

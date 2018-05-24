@@ -1,7 +1,7 @@
 // -*- tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 // vi: set et ts=4 sw=2 sts=2:
-#ifndef DUNE_MODELLING_GEOELECTRICS_HH
-#define DUNE_MODELLING_GEOELECTRICS_HH
+#ifndef DUNE_FTG_GEOELECTRICS_HH
+#define DUNE_FTG_GEOELECTRICS_HH
 
 #include<dune/pdelab/common/referenceelements.hh>
 #include<dune/pdelab/finiteelementmap/p0fem.hh>
@@ -10,11 +10,11 @@
 
 #include<dune/modelling/fluxreconstruction.hh>
 #include<dune/modelling/solutionstorage.hh>
-#include<dune/ftg/override/solvers_transient.hh>
+#include<dune/ftg/override/solvers.hh>
 #include<dune/grid/utility/hierarchicsearch.hh>
 
 namespace Dune {
-  namespace Modelling {    
+  namespace Modelling {
     /**
      * @brief Parameter class for the geoelectrics equation
      */
@@ -28,8 +28,8 @@ namespace Dune {
         using MeasurementList = typename Traits::MeasurementList;
         //using SubMeasurements = typename MeasurementList::SubMeasurements;
 
-        const Traits& traits;        
-        
+        const Traits& traits;
+
         std::shared_ptr<SolutionStorage<Traits,ModelTypes::Geoelectrics,Direction::Forward> > forwardStorage;
         std::shared_ptr<SolutionStorage<Traits,ModelTypes::Geoelectrics,Direction::Adjoint> > adjointStorage;
 
@@ -46,9 +46,13 @@ namespace Dune {
           : ModelParametersBase<Traits>(name), traits(traits_)
         {
           // access the name of the model to know which electrode is active
+          std::string model_name = name;
+          std::string common_base = "geoelectrics";
+          auto start_position_to_erase = model_name.find(common_base);
+          // get rid of "geoelectrics" to get the number n of the model "geoelectricsn"
+          model_number = std::stoi(model_name.erase(start_position_to_erase, common_base.size())); 
           std::string model_name_temp = name;
-          model_name_temp.erase(0,12); // get rid of "geoelectrics" to get the number n of the model "geoelectricsn"
-          model_number = std::stoi(model_name_temp);
+                 
           electrode_cell_indx = traits.read_electrode_cell_indices()[model_number];
         }
 
@@ -95,6 +99,8 @@ namespace Dune {
 
         RF timestep() const
         {
+          if (traits.basePotentialEvaluation)
+            return traits.config().template get<RF>("time.end"); // max time, because stationary
           return traits.config().template get<RF>("time.step_geoelectrics");
         }
 
@@ -125,6 +131,14 @@ namespace Dune {
         {
           return traits.grid().leafGridView().indexSet();
         };
+
+        template<typename Element, typename Domain, typename Time>
+          RF potential(const Element& elem, const Domain& x, const Time& time) const
+          {
+            typename Traits::GridTraits::Scalar localConcentration;
+            (*forwardStorage).value(time,elem,x,localConcentration);
+            return localConcentration[0];
+          }
 
         // electrical conductivity based on concentration transformation in each element
         template<typename Element, typename Domain, typename Time>
@@ -222,6 +236,12 @@ namespace Dune {
         {
        	  transportParams = otherParams;  
         }
+        void registerModel(
+            const std::string& name,
+            const std::shared_ptr<ModelParameters<Traits,ModelTypes::Moments_ERT> >& otherParams
+            )
+        {
+        }
 
       };
 
@@ -253,7 +273,7 @@ namespace Dune {
           // use linear solver in stationary case,
           // implicit linear solver for transient case
           template<typename... T>
-            using StationarySolver = StationaryLinearSolver<T...>;
+            using StationarySolver = StationaryLinearSolver_CG_AMG_SSOR<T...>;
           template<typename... T>
             using TransientSolver  = ImplicitLinearSolver<T...>;
 
@@ -770,35 +790,7 @@ namespace Dune {
           }
 
       };
-    
-    /**
-     * @brief Class providing sensitivity computation for geoelectrics flow
-     */
-    template<typename Traits>
-      class SensitivityComp<Traits,ModelTypes::Geoelectrics>
-      {
-        public:
-
-          SensitivityComp(
-              const Traits& traits,
-              const ModelParameters<Traits,ModelTypes::Geoelectrics>& parameters
-              )
-          {}
-
-          void initialize(const std::shared_ptr<typename Traits::SensitivityList>& sensitivityList)
-          {
-          }
-
-          template<typename Time>
-            void extract(const Time& first, const Time& last)
-            {
-              std::cout << "(would extract sensitivity from " << first
-                << " to " << last << ")" << std::endl;
-            }
-
-      };
-
   }
 }
 
-#endif // DUNE_MODELLING_GEOELECTRICS_HH
+#endif // DUNE_FTG_GEOELECTRICS_HH
