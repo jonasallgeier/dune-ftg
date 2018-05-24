@@ -366,6 +366,7 @@ class ModelTraits
       private:
         const ModelTraits& traits;
         bool clearFiles = true;
+        bool clearFiles_c = true;
         std::map<unsigned int, std::map<unsigned int, RF> > output_all_electrodes;
         
         auto& index_set() const
@@ -453,7 +454,6 @@ class ModelTraits
                   std::string timefilename;
                   timefilename.append(filenamebase);
                   timefilename.append(".times");
-
                   if (clearFiles)
                   { 
                     timefile.open(timefilename, std::ios::out | std::ios::trunc); // clear the file
@@ -556,10 +556,10 @@ class ModelTraits
                 timefilename.append(filenamebase);
                 timefilename.append(".times");
 
-                if (clearFiles)
+                if (clearFiles_c)
                 { 
                   timefile.open(timefilename, std::ios::out | std::ios::trunc); // clear the file
-                  clearFiles = false;
+                  clearFiles_c = false;
                   timefile << "electrodes " << electrode_cells.size() << std::endl;
                   timefile << "processors " << traits.helper.size() << std::endl;
                   timefile << "times";

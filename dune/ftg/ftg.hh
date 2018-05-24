@@ -137,7 +137,6 @@ void unify_geoelectrics_results(auto modelTraits)
   timefilename.append(".times");          
   
   std::string temp;
-
   std::ifstream timefile(timefilename);
   unsigned int no_electrodes;
   unsigned int no_processors;
@@ -228,7 +227,6 @@ void unify_geoelectrics_results(auto modelTraits)
         outfile << current_entry.first.first << " " << current_entry.first.second << " " << current_entry.second << std::endl;
       }
       outfile.close();
-      remove(timefilename.c_str());
     }
   }
 }
@@ -315,7 +313,6 @@ void unify_transport_results(auto modelTraits)
         outfile << current_entry.first << " " << current_entry.second << std::endl;
       }
       outfile.close();
-      //remove(timefilename.c_str());
     }
   }
 }
