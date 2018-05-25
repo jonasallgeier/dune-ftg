@@ -128,23 +128,21 @@ void set_wells(auto modelTraits)
 
 
 template<typename ModelTraits>
-void unify_geoelectrics_results(auto modelTraits)
+void unify_ERT_results(auto modelTraits)
 {
-  std::string filenamebase = modelTraits->config().template get<std::string>("output.writeGeoelectricsFilename","results");
+  std::string filenamebase = modelTraits->config().template get<std::string>("output.writeERTFilename","results");
   
-  std::string timefilename;
-  timefilename.append(filenamebase);
-  timefilename.append(".times");          
+  std::string timefilename = filenamebase + ".times";
   
   std::string temp;
   std::ifstream timefile(timefilename);
   unsigned int no_electrodes;
   unsigned int no_processors;
-  timefile >> temp;
+  timefile >> temp; // skip label
   timefile >> no_electrodes;
-  timefile >> temp;
+  timefile >> temp; // skip label
   timefile >> no_processors;
-  timefile >> temp;
+  timefile >> temp; // skip label
 
   std::string time;
   std::vector<std::string> times;
@@ -161,28 +159,17 @@ void unify_geoelectrics_results(auto modelTraits)
   
     for( unsigned int proc = 0; proc < no_processors; ++proc ) 
     {
-      std::string infilename;
-      infilename.append(filenamebase);
+      std::string infilename = filenamebase;
 
       if (modelTraits->basePotentialEvaluation)
       {
-        infilename.append("_base");
+        infilename += ("_base_" + std::to_string(proc) + ".data");
       } else
       {
-        infilename.append("_");
-        infilename.append(timeString);
+        infilename += ("_" + timeString + "_" + std::to_string(proc) + ".data");
       }
 
-      infilename.append("_");
-      std::stringstream ss;
-      ss << proc;
-      std::string rank(ss.str());
-      infilename.append(rank);
-      infilename.append(".data");
-
-
       std::ifstream infile(infilename);
-
       //skip header line
       infile >> temp;
       infile >> temp;
@@ -198,30 +185,27 @@ void unify_geoelectrics_results(auto modelTraits)
         infile >> measured_electrode;
         infile >> potential;
 
-        std::pair<unsigned int, unsigned int> tmp_pair;
-        tmp_pair = std::make_pair(injection_electrode,measured_electrode);
+        std::pair<unsigned int, unsigned int> key;
+        key = std::make_pair(injection_electrode,measured_electrode);
 
-        complete_map.insert(std::pair<std::pair<unsigned int, unsigned int>, RF >(tmp_pair, potential));
+        complete_map.insert(std::pair<std::pair<unsigned int, unsigned int>, RF >(key, potential));
       }
       infile.close();
       remove(infilename.c_str());
       
       std::ofstream outfile;
-      std::string outfilename;
-      outfilename.append(filenamebase);
+      std::string outfilename = filenamebase;
+
       if (modelTraits->basePotentialEvaluation)
       {
-        outfilename.append("_base");
+        outfilename += ("_base.data");
       } else
-      { 
-        outfilename.append("_");
-        outfilename.append(timeString);
+      {
+        outfilename += ("_" + timeString + ".data");
       }
-      outfilename.append(".data");
 
       outfile.open(outfilename, std::ios::out | std::ios::trunc);
       outfile << "injected_el measured_el potential" << std::endl;
-
       for (auto const & current_entry : complete_map)
       {
         outfile << current_entry.first.first << " " << current_entry.first.second << " " << current_entry.second << std::endl;
@@ -236,12 +220,9 @@ void unify_transport_results(auto modelTraits)
 {
   std::string filenamebase = modelTraits->config().template get<std::string>("output.writeTransportFilename","results");
   
-  std::string timefilename;
-  timefilename.append(filenamebase);
-  timefilename.append(".times");          
-  
+  std::string timefilename = filenamebase + ".times";
+ 
   std::string temp;
-
   std::ifstream timefile(timefilename);
   unsigned int no_electrodes;
   unsigned int no_processors;
@@ -266,48 +247,29 @@ void unify_transport_results(auto modelTraits)
   
     for( unsigned int proc = 0; proc < no_processors; ++proc ) 
     {
-      std::string infilename;
-      infilename.append(filenamebase);
-      infilename.append("_");
-      infilename.append(timeString);
-
-      infilename.append("_");
-      std::stringstream ss;
-      ss << proc;
-      std::string rank(ss.str());
-      infilename.append(rank);
-      infilename.append(".data");
-
-
+      std::string infilename = filenamebase + "_" + timeString + "_" + std::to_string(proc) + ".data";
       std::ifstream infile(infilename);
 
-      //skip header line
+      // skip header line
       infile >> temp;
       infile >> temp;
-
-      unsigned int electrode;
-      RF concentration;
 
       while ( !infile.eof() )
       {
+        unsigned int electrode;
+        RF concentration;
         infile >> electrode;
         infile >> concentration;
-
         complete_map.insert(std::pair<unsigned int, RF>(electrode, concentration));
       }
       infile.close();
       remove(infilename.c_str());
       
       std::ofstream outfile;
-      std::string outfilename;
-      outfilename.append(filenamebase);
-      outfilename.append("_");
-      outfilename.append(timeString);
-      outfilename.append(".data");
-
+      std::string outfilename = filenamebase + "_" + timeString + ".data";
       outfile.open(outfilename, std::ios::out | std::ios::trunc);
-      outfile << "electrode concentration" << std::endl;
 
+      outfile << "electrode concentration" << std::endl;
       for (auto const & current_entry : complete_map)
       {
         outfile << current_entry.first << " " << current_entry.second << std::endl;
@@ -317,5 +279,142 @@ void unify_transport_results(auto modelTraits)
   }
 }
 
+template<typename ModelTraits>
+void unify_momentsTransport_results(auto modelTraits)
+{
+  std::string filenamebase = modelTraits->config().template get<std::string>("output.writeMomentsTransportFilename","results");
+  std::string timefilename = filenamebase + ".moments";
+ 
+  std::string temp;
+  std::ifstream timefile(timefilename);
+  unsigned int no_electrodes;
+  unsigned int no_processors;
+  timefile >> temp;
+  timefile >> no_electrodes;
+  timefile >> temp;
+  timefile >> no_processors;
+  timefile >> temp;
+
+  std::string moment;
+  std::vector<std::string> moments;
+  while ( !timefile.eof() )
+  {
+    timefile >> moment;
+    moments.push_back(moment);
+  }
+  using  RF  = typename ModelTraits::GridTraits::RangeField;
+
+  for (auto const& momentString: moments) 
+  {
+    std::map<unsigned int, RF > complete_map; // < electrode, concentration > 
+  
+    for( unsigned int proc = 0; proc < no_processors; ++proc ) 
+    {
+      std::string infilename = filenamebase + "_" + momentString + "_" + std::to_string(proc) + ".data";
+      std::ifstream infile(infilename);
+
+      // skip header line
+      infile >> temp;
+      infile >> temp;
+
+      while ( !infile.eof() )
+      {
+        unsigned int electrode;
+        RF momentTransport;
+        infile >> electrode;
+        infile >> momentTransport;
+        complete_map.insert(std::pair<unsigned int, RF>(electrode, momentTransport));
+      }
+      infile.close();
+      remove(infilename.c_str());
+      
+      std::ofstream outfile;
+      std::string outfilename = filenamebase + "_" + momentString + ".data";
+      outfile.open(outfilename, std::ios::out | std::ios::trunc);
+
+      outfile << "electrode momentTransport" << std::endl;
+      for (auto const & current_entry : complete_map)
+      {
+        outfile << current_entry.first << " " << current_entry.second << std::endl;
+      }
+      outfile.close();
+    }
+  }
+}
+
+template<typename ModelTraits>
+void unify_momentsERT_results(auto modelTraits)
+{
+  std::string filenamebase = modelTraits->config().template get<std::string>("output.writeMomentsERTFilename","results");
+  
+  std::string timefilename = filenamebase + ".moments";
+  
+  std::string temp;
+  std::ifstream timefile(timefilename);
+  unsigned int no_electrodes;
+  unsigned int no_processors;
+  timefile >> temp; // skip label
+  timefile >> no_electrodes;
+  timefile >> temp; // skip label
+  timefile >> no_processors;
+  timefile >> temp; // skip label
+
+  std::string moment;
+  std::vector<std::string> moments;
+  while ( !timefile.eof() )
+  {
+    timefile >> moment;
+    moments.push_back(moment);
+  }
+  using RF  = typename ModelTraits::GridTraits::RangeField;
+
+  for (auto const& momentString: moments) 
+  {
+    std::map<std::pair<unsigned int, unsigned int>, RF > complete_map; // <injection electrode, <measured electrode, potential> > 
+  
+    for( unsigned int proc = 0; proc < no_processors; ++proc ) 
+    {
+      std::string infilename = filenamebase;
+
+      infilename += ("_" + momentString + "_" + std::to_string(proc) + ".data");
+
+      std::ifstream infile(infilename);
+      //skip header line
+      infile >> temp;
+      infile >> temp;
+      infile >> temp;
+
+      unsigned int injection_electrode;
+      unsigned int measured_electrode;
+      RF value;
+
+      while ( !infile.eof() )
+      {
+        infile >> injection_electrode;
+        infile >> measured_electrode;
+        infile >> value;
+
+        std::pair<unsigned int, unsigned int> key;
+        key = std::make_pair(injection_electrode,measured_electrode);
+
+        complete_map.insert(std::pair<std::pair<unsigned int, unsigned int>, RF >(key, value));
+      }
+      infile.close();
+      remove(infilename.c_str());
+      
+      std::ofstream outfile;
+      std::string outfilename = filenamebase;
+
+      outfilename += ("_" + momentString + ".data");
+      outfile.open(outfilename, std::ios::out | std::ios::trunc);
+      outfile << "injected_el measured_el potential" << std::endl;
+      for (auto const & current_entry : complete_map)
+      {
+        outfile << current_entry.first.first << " " << current_entry.first.second << " " << current_entry.second << std::endl;
+      }
+      outfile.close();
+    }
+  }
+}
 
 #endif // DUNE_FTG_HH

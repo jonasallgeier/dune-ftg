@@ -45,7 +45,7 @@ namespace Dune {
         {
           // access the name of the model to know which moment has to be calculated
           std::string model_name = name;
-          std::string common_base = "moments_c";
+          std::string common_base = "momentsTransport_";
           auto start_position_to_erase = model_name.find(common_base);
           model_number = std::stoi(model_name.erase(start_position_to_erase, common_base.size())); 
           std::string model_name_temp = name;

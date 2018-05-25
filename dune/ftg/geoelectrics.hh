@@ -47,9 +47,9 @@ namespace Dune {
         {
           // access the name of the model to know which electrode is active
           std::string model_name = name;
-          std::string common_base = "geoelectrics";
+          std::string common_base = "ERT_";
           auto start_position_to_erase = model_name.find(common_base);
-          // get rid of "geoelectrics" to get the number n of the model "geoelectricsn"
+          // get rid of "ERT_" to get the number n of the model "ERT_n"
           model_number = std::stoi(model_name.erase(start_position_to_erase, common_base.size())); 
           std::string model_name_temp = name;
                  
@@ -101,7 +101,7 @@ namespace Dune {
         {
           if (traits.basePotentialEvaluation)
             return traits.config().template get<RF>("time.end"); // max time, because stationary
-          return traits.config().template get<RF>("time.step_geoelectrics");
+          return traits.config().template get<RF>("time.step_ERT");
         }
 
         /**

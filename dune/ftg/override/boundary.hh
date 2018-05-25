@@ -156,20 +156,20 @@ namespace Dune {
           Dune::ParameterTreeParser parser;
           
           // get boundary files; use one for all generated models!
-          if (name.find("geoelectrics") == 0)
+          if (name.find("ERT_") == 0)
           {
-            parser.readINITree("boundary.geoelectrics",boundaryConfig);
+            parser.readINITree("./boundary/ERT",boundaryConfig);
           } 
-          else if (name.find("moments_c") == 0)
+          else if (name.find("momentsTransport_") == 0)
           {
-            parser.readINITree("boundary.moments_c",boundaryConfig);
+            parser.readINITree("./boundary/momentsTransport",boundaryConfig);
           } 
-          else if (name.find("moments_ERT") == 0)
+          else if (name.find("momentsERT_") == 0)
           {
-            parser.readINITree("boundary.moments_ERT",boundaryConfig);
+            parser.readINITree("./boundary/momentsERT",boundaryConfig);
           }
           else {
-              parser.readINITree("boundary."+name,boundaryConfig);
+              parser.readINITree("./boundary/"+name,boundaryConfig);
           }            
 
 

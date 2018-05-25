@@ -54,8 +54,8 @@ void transient(int argc, char** argv, bool evaluateBasePotentials)
   using GeoelectricsModel = ForwardModel<ModelTraits,ModelTypes::Geoelectrics,Formulation::Stationary>;
 
   // insert groundwater and transport model into forward model list
-  forwardModelList.add<GroundwaterModel>("groundwater");
-  forwardModelList.add<TransportModel,GroundwaterModel>("transport",std::list<std::string>{"groundwater"});
+  forwardModelList.add<GroundwaterModel>("groundwaterFlow");
+  forwardModelList.add<TransportModel,GroundwaterModel>("soluteTransport",std::list<std::string>{"groundwaterFlow"});
   
   set_electrodes<ModelTraits>(&modelTraits);
   set_wells<ModelTraits>(&modelTraits);
@@ -64,8 +64,8 @@ void transient(int argc, char** argv, bool evaluateBasePotentials)
   std::stringstream temp_ss;
   for (int i = 0; i < modelTraits.electrodeconfiguration.no_electrodes; i++)
   {
-    std::string name = "geoelectrics" + std::to_string(i); //name for the n-th model is geoelectricsn
-    forwardModelList.add<GeoelectricsModel,TransportModel>(name,std::list<std::string>{"transport"}); //create a new geoelectrics model
+    std::string name = "ERT_" + std::to_string(i); //name for the n-th model is geoelectricsn
+    forwardModelList.add<GeoelectricsModel,TransportModel>(name,std::list<std::string>{"soluteTransport"}); //create a new geoelectrics model
   }
   
   // print information about model list, avoid multiple outputs if run is parallel
@@ -81,19 +81,18 @@ void transient(int argc, char** argv, bool evaluateBasePotentials)
   // perform forward run
   forwardModelList.solve(parameterList,measurementList);
   
-  // give output of total elapsed time  
-  totalTimer.stop();
-  if (helper.rank() == 0)
-    std::cout << "Total time elapsed: " << totalTimer.elapsed() << std::endl;
-  
   if (helper.rank()== 0 && modelTraits.config().template get<bool>("output.unify_parallel_results",false))
   {
-    if (modelTraits.config().template get<bool>("output.writeGeoelectrics",false))
+    if (modelTraits.config().template get<bool>("output.writeERT",false))
       unify_geoelectrics_results<ModelTraits>(&modelTraits);
     if (modelTraits.config().template get<bool>("output.writeTransport",false))
       unify_transport_results<ModelTraits>(&modelTraits);
   }
 
+  // give output of total elapsed time  
+  totalTimer.stop();
+  if (helper.rank() == 0)
+    std::cout << "Total time elapsed: " << totalTimer.elapsed() << std::endl;
 }
 
 

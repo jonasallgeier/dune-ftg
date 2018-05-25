@@ -356,19 +356,72 @@ class ModelTraits
     {
       private:
         const ModelTraits& traits;
-        bool clearFiles = true;
-        bool clearFiles_c = true;
-        std::map<unsigned int, std::map<unsigned int, RF> > output_all_electrodes;
-        
+
+        // initial writing will clear the files, all other writings will append
+        bool clearFiles_ERT               = true;
+        bool clearFiles_Transport         = true;
+        bool clearFiles_MomentsTransport  = true;
+        bool clearFiles_MomentsERT        = true;
+
+        std::map<unsigned int, std::map<unsigned int, RF> > output_ERT_all_electrodes;
+   
+        // < <moment k, inj el> <meas el, value> >
+        std::map<std::pair<unsigned int, unsigned int>, std::map<unsigned int, RF> > output_MomentsERT_all_electrodes;  
+        bool writeERT; 
+        bool writeTransport; 
+        bool writeMomentsTransport;
+        bool writeMomentsERT;      
+
         auto& index_set() const
         {
           return traits.grid().leafGridView().indexSet();
         };
 
+        template<typename Storage>
+        unsigned int extraction_helper(std::map<unsigned int, RF> & output_this_electrode, const Storage& storage, const RF& time)
+        {
+          std::vector<unsigned int> electrode_cells = traits.read_electrode_cell_indices();
+          const typename GridTraits::Domain x = {0.5, 0.5, 0.5}; // get value at cell center
+
+          for (const auto & elem : elements (traits.grid().leafGridView()))
+          {
+            //check if this cell is a measurement cell/is multiple measurement cells --> get electrode numbers of current cell
+            unsigned int cell_index = index_set().index(elem);
+            std::vector<unsigned int> affected_electrodes; 
+            
+            auto lambda_compare = [cell_index](unsigned int n) { return (n==cell_index); };
+            
+            std::vector<unsigned int>::iterator it = std::find_if (electrode_cells.begin(), electrode_cells.end(), lambda_compare);
+            while ((electrode_cells.end()) != it) 
+            {
+              affected_electrodes.push_back( distance(electrode_cells.begin(), it) );
+              it++;
+              it = std::find_if (it, electrode_cells.end(), lambda_compare);
+            }
+
+            // if there is one or more electrodes -> measure the potential & write output in output vector
+            if (affected_electrodes.size() > 0)
+            {
+              typename GridTraits::Scalar output = 0.0;  
+              (*storage).value(time,elem,x,output);
+              for(std::vector<unsigned int>::iterator iter = affected_electrodes.begin(); iter != affected_electrodes.end(); ++iter)
+              {
+                output_this_electrode.insert ( std::pair<unsigned int,RF>(*iter+1,output) );
+              }
+            }
+          }
+          return electrode_cells.size();
+        }
+
       public:
       MeasurementList(const ModelTraits& traits_)
         : traits(traits_)
-      {}
+      {
+        writeERT              = traits.config().template get<bool>("output.writeERT",false); 
+        writeTransport        = traits.config().template get<bool>("output.writeTransport",false); 
+        writeMomentsTransport = traits.config().template get<bool>("output.writeMomentsTransport",false);
+        writeMomentsERT       = traits.config().template get<bool>("output.writeMomentsERT",false);      
+      }
 
         void setTimes(const RF& one, const RF& two)
         {}
@@ -384,172 +437,43 @@ class ModelTraits
         }
 
         template<typename Storage>
-        void extract(const Storage& storage, const RF& firstTime, const RF& time, const std::string & modelname, const unsigned int& modelNumber,const std::string& timeString, Dune::Timer&  printTimer)              
+        void extract(const Storage& storage, const RF& firstTime, const RF& time,
+            const std::string & modelname, const unsigned int& modelNumber,const std::string& timeString, Dune::Timer&  printTimer)              
         {
           // determine which modeltype we have and if the output is desired; could probably be performed using templates
-          bool writeGeoelectrics = traits.config().template get<bool>("output.writeGeoelectrics",false);
-          bool isGeoelectrics = (modelname.substr(0, 12).compare("geoelectrics") == 0);
-          bool writeTransport = traits.config().template get<bool>("output.writeTransport",false);
-          bool isTransport = (modelname.substr(0, 9).compare("transport") == 0);
+          bool isERT              = (modelname.find("ERT_") == 0);
+          bool isTransport        = (modelname.find("soluteTransport") == 0);
+          bool isMomentsTransport = (modelname.find("momentsTransport_") == 0);
+          bool isMomentsERT       = (modelname.find("momentsERT_") == 0);
           
-          if (writeGeoelectrics && isGeoelectrics)
+          if (writeERT && isERT)
+          {
+            printTimer.start();
+            
+            //declare output map for this source electrode; [1:144]
+            std::map<unsigned int, RF> current_output;
+            unsigned int no_electrodes = extraction_helper<Storage>(current_output,storage,time); // get the results of this model
+
+            // add the output for the active electrode to the map of all electrodes
+            // increase modelNumber by one, as models are counted from 0, while electrode names start with 1
+            output_ERT_all_electrodes.insert(std::pair<unsigned int,std::map<unsigned int, RF> >(modelNumber+1, current_output));
+
+            // if this is the last ERT model print output to file
+            if (modelNumber+1 == no_electrodes)
             {
-              std::vector<unsigned int> electrode_cells = traits.read_electrode_cell_indices();
-              const typename GridTraits::Domain x = {0.5, 0.5, 0.5}; // get value at cell center
-
-              //declare output map for this source electrode; [1:144]
-              std::map<unsigned int, RF> output_this_electrode;
-          
-              for (const auto & elem : elements (traits.grid().leafGridView()))
-              {
-                //check if this cell is a measurement cell/is multiple measurement cells --> get electrode numbers of current cell
-                unsigned int cell_index = index_set().index(elem);
-                std::vector<unsigned int> affected_electrodes; 
-                
-                auto lambda_compare = [cell_index](unsigned int n) { return (n==cell_index); };
-                
-                std::vector<unsigned int>::iterator it = std::find_if (electrode_cells.begin(), electrode_cells.end(), lambda_compare);
-                while ((electrode_cells.end()) != it) 
-                {
-                  affected_electrodes.push_back( distance(electrode_cells.begin(), it) );
-                  it++;
-                  it = std::find_if (it, electrode_cells.end(), lambda_compare);
-                }
-
-                // if there is one or more electrodes -> measure the potential & write output in output vector
-                if (affected_electrodes.size() > 0)
-                {
-                  typename GridTraits::Scalar output = 0.0;  
-                  (*storage).value(time,elem,x,output);
-                  for(std::vector<unsigned int>::iterator iter = affected_electrodes.begin(); iter != affected_electrodes.end(); ++iter)
-                  {
-                    output_this_electrode.insert ( std::pair<unsigned int,RF>(*iter+1,output) );
-                  }
-                }
-              }
-              output_all_electrodes.insert(std::pair<unsigned int,std::map<unsigned int, RF> >(modelNumber+1,output_this_electrode));
-
-              // if this is the last geoelectrics model print output to file
-              if (modelNumber+1 == electrode_cells.size())
-              {
-                printTimer.start();
-                std::string filenamebase = traits.config().template get<std::string>("output.writeGeoelectricsFilename","results");
-                if (traits.rank() == 0)
-                {
-                  std::cout << "printing ERT results" << std::endl;
-
-                  // print the temporal information to a timefile
-                  std::ofstream timefile;
-                  std::string timefilename;
-                  timefilename.append(filenamebase);
-                  timefilename.append(".times");
-                  if (clearFiles)
-                  { 
-                    timefile.open(timefilename, std::ios::out | std::ios::trunc); // clear the file
-                    clearFiles = false;
-                    timefile << "electrodes " << electrode_cells.size() << std::endl;
-                    timefile << "processors " << traits.helper.size() << std::endl;
-                    timefile << "times";
-                  } else 
-                  {
-                    timefile.open(timefilename, std::ios::app); // append to file
-                  }
-                  timefile << " " << time;
-                  timefile.close();
-                }
-
-                std::stringstream ss;
-                ss << traits.rank();
-                std::string rank(ss.str());
-
-                std::ofstream outfile;
-                std::string filename;
-                filename.append(filenamebase);
-                if (traits.basePotentialEvaluation)
-                {
-                  filename.append("_base");
-                } else
-                {
-                  filename.append("_");
-                  filename.append(timeString);
-                }
-                filename.append("_");
-                filename.append(rank);
-                filename.append(".data");
-
-                outfile.open(filename, std::ios::out | std::ios::trunc);
-
-                outfile << "injected_el measured_el potential" << std::endl;
-
-                for (auto const & injection_electrode : output_all_electrodes)
-                {
-                  for (auto const & measurement_electrode : injection_electrode.second)
-                  {
-                    outfile << injection_electrode.first << " " << measurement_electrode.first << " " << measurement_electrode.second << std::endl;
-                  }
-                }
-                outfile.close();
-                output_all_electrodes.clear(); // reset local storage of all ERT measurements
-              
-                printTimer.stop();
-              }
-            }
-          
-          RF current_time = time;
-          bool timeforTransport = (std::fmod(current_time, traits.config().template get<RF>("time.step_geoelectrics"))  == 0);
-          if (writeTransport && isTransport && timeforTransport)
-            {
-              std::vector<unsigned int> electrode_cells = traits.read_electrode_cell_indices();
-              const typename GridTraits::Domain x = {0.5, 0.5, 0.5}; // get value at cell center
-
-              //declare output map for this source electrode; [1:144]
-              std::map<unsigned int, RF> output_this_electrode;
-          
-              for (const auto & elem : elements (traits.grid().leafGridView()))
-              {
-                //check if this cell is a measurement cell/is multiple measurement cells --> get electrode numbers of current cell
-                unsigned int cell_index = index_set().index(elem);
-                std::vector<unsigned int> affected_electrodes; 
-                
-                auto lambda_compare = [cell_index](unsigned int n) { return (n==cell_index); };
-                
-                std::vector<unsigned int>::iterator it = std::find_if (electrode_cells.begin(), electrode_cells.end(), lambda_compare);
-                while ((electrode_cells.end()) != it) 
-                {
-                  affected_electrodes.push_back( distance(electrode_cells.begin(), it) );
-                  it++;
-                  it = std::find_if (it, electrode_cells.end(), lambda_compare);
-                }
-
-                // if there is one or more electrodes -> measure the potential & write output in output vector
-                if (affected_electrodes.size() > 0)
-                {
-                  typename GridTraits::Scalar output = 0.0;  
-                  (*storage).value(time,elem,x,output);
-                  for(std::vector<unsigned int>::iterator iter = affected_electrodes.begin(); iter != affected_electrodes.end(); ++iter)
-                  {
-                    output_this_electrode.insert ( std::pair<unsigned int,RF>(*iter+1,output) );
-                  }
-                }
-              }
-              
-              printTimer.start();
-              std::string filenamebase = traits.config().template get<std::string>("output.writeTransportFilename","results");
+              std::string filenamebase = traits.config().template get<std::string>("output.writeERTFilename","results");
               if (traits.rank() == 0)
               {
-                std::cout << "printing concentration results" << std::endl;
+                std::cout << "printing ERT results" << std::endl;
 
                 // print the temporal information to a timefile
                 std::ofstream timefile;
-                std::string timefilename;
-                timefilename.append(filenamebase);
-                timefilename.append(".times");
-
-                if (clearFiles_c)
+                std::string timefilename = filenamebase + ".times";
+                if (clearFiles_ERT)
                 { 
                   timefile.open(timefilename, std::ios::out | std::ios::trunc); // clear the file
-                  clearFiles_c = false;
-                  timefile << "electrodes " << electrode_cells.size() << std::endl;
+                  clearFiles_ERT = false;
+                  timefile << "electrodes " << no_electrodes << std::endl;
                   timefile << "processors " << traits.helper.size() << std::endl;
                   timefile << "times";
                 } else 
@@ -560,32 +484,213 @@ class ModelTraits
                 timefile.close();
               }
 
-              std::stringstream ss;
-              ss << traits.rank();
-              std::string rank(ss.str());
-
               std::ofstream outfile;
-              std::string filename;
-              filename.append(filenamebase);
-              filename.append("_");
-              filename.append(timeString);
-              filename.append("_");
-              filename.append(rank);
-              filename.append(".data");
+              std::string filename = filenamebase;
+              // if these are base potentials, don't name after time
+              if (traits.basePotentialEvaluation)
+              {
+                filename += ("_base_" + std::to_string(traits.rank()) + ".data");
+              } else
+              {
+                filename += ("_" + timeString + "_" + std::to_string(traits.rank()) + ".data");
+              }
 
               outfile.open(filename, std::ios::out | std::ios::trunc);
+              outfile << "injected_el measured_el potential" << std::endl;
 
-              outfile << "electrode concentration" << std::endl;
-
-              for (auto const & electrode : output_this_electrode)
+              // go through the collected data set -> get measured potentials for one injection
+              for (auto const & injection_electrode : output_ERT_all_electrodes)
               {
-                outfile << electrode.first << " " << electrode.second << std::endl;
+                for (auto const & measurement_electrode : injection_electrode.second)
+                {
+                  outfile<<injection_electrode.first<<" "<<measurement_electrode.first<<" "<<measurement_electrode.second<<std::endl;
+                }
               }
               outfile.close();
-              output_all_electrodes.clear(); // reset local storage of all ERT measurements
-            
-              printTimer.stop();
+              output_ERT_all_electrodes.clear(); // reset local storage of all ERT measurements
             }
+            printTimer.stop();
+          }
+
+          // only save transport results at ERT measurement times          
+          RF current_time = time;
+          bool timeforTransport = (std::fmod(current_time, traits.config().template get<RF>("time.step_ERT"))  == 0);
+
+          if (writeTransport && isTransport && timeforTransport)
+          {
+            printTimer.start();
+
+            //declare output map for this source electrode; [1:144]
+            std::map<unsigned int, RF> current_output;
+            unsigned int no_electrodes = extraction_helper<Storage>(current_output,storage,time); // get the results of this model
+            
+            std::string filenamebase = traits.config().template get<std::string>("output.writeTransportFilename","results");
+            if (traits.rank() == 0)
+            {
+              std::cout << "printing concentration moments results" << std::endl;
+
+              // print the temporal information to a timefile
+              std::ofstream timefile;
+              std::string timefilename = filenamebase + std::to_string(modelNumber) + ".times";
+
+              if (clearFiles_MomentsTransport)
+              { 
+                timefile.open(timefilename, std::ios::out | std::ios::trunc); // clear the file
+                clearFiles_MomentsTransport = false;
+                timefile << "electrodes " << no_electrodes << std::endl;
+                timefile << "processors " << traits.helper.size() << std::endl;
+              } else 
+              {
+                timefile.open(timefilename, std::ios::app); // append to file
+              }
+              timefile << " " << time;
+              timefile.close();
+            }
+
+            std::ofstream outfile;
+            std::string filename = filenamebase + "_" + timeString + "_" + std::to_string(traits.rank()) + ".data";
+
+            outfile.open(filename, std::ios::out | std::ios::trunc);
+            outfile << "electrode concentration" << std::endl;
+            for (auto const & electrode : current_output)
+            {
+              outfile << electrode.first << " " << electrode.second << std::endl;
+            }
+            outfile.close();
+          
+            printTimer.stop();
+          }
+
+          if (writeMomentsTransport && isMomentsTransport)
+          {
+            printTimer.start();
+
+            //declare output map for this source electrode; [1:144]
+            std::map<unsigned int, RF> current_output;
+            unsigned int no_electrodes = extraction_helper<Storage>(current_output,storage,time); // get the results of this model
+            
+            std::string filenamebase = traits.config().template get<std::string>("output.writeMomentsTransportFilename","results");
+            if (traits.rank() == 0)
+            {
+              std::cout << "printing transport moment(" << modelNumber << ") results" << std::endl;
+
+              // print the temporal information to a timefile
+              std::ofstream timefile;
+              std::string timefilename = filenamebase + ".moments";
+
+              if (clearFiles_Transport)
+              { 
+                timefile.open(timefilename, std::ios::out | std::ios::trunc); // clear the file
+                clearFiles_Transport = false;
+                timefile << "electrodes " << no_electrodes << std::endl;
+                timefile << "processors " << traits.helper.size() << std::endl;
+                timefile << "moments";
+              } else 
+              {
+                timefile.open(timefilename, std::ios::app); // append to file
+              }
+              timefile << " " << std::to_string(modelNumber);
+              timefile.close();
+            }
+
+            std::ofstream outfile;
+            std::string filename = filenamebase + "_" + std::to_string(modelNumber) + "_" + std::to_string(traits.rank()) + ".data";
+
+            outfile.open(filename, std::ios::out | std::ios::trunc);
+            outfile << "electrode momentConcentration" << std::endl;
+            for (auto const & electrode : current_output)
+            {
+              outfile << electrode.first << " " << electrode.second << std::endl;
+            }
+            outfile.close();
+          
+            printTimer.stop();
+          }
+
+          if (writeMomentsERT && isMomentsERT)
+          {
+            printTimer.start();
+            
+            //declare output map for this source electrode; [1:144]
+            std::map<unsigned int, RF> current_output;
+            unsigned int no_electrodes = extraction_helper<Storage>(current_output,storage,time); // get the results of this model
+
+            unsigned int k; // moment number
+
+            std::string str = modelname;
+            std::string common_base = "momentsERT_";
+            auto start_position_to_erase = str.find(common_base);
+            str.erase(start_position_to_erase, common_base.size());      
+            std::replace(str.begin(), str.end(), '_', ' ');
+
+
+            std::stringstream ss; 
+            ss << str;
+            std::string temp;
+            ss >> temp; // get the ERT model number
+            ss >> temp; // get the moment number k
+            std::stringstream(temp) >> k;
+
+            // add the output for the active electrode to the map of all electrodes
+            // increase modelNumber by one, as models are counted from 0, while electrode names start with 1
+
+            std::pair<unsigned int, unsigned int> key;
+            key = std::make_pair (k,modelNumber+1);
+            output_MomentsERT_all_electrodes.insert(std::pair< std::pair<unsigned int, unsigned int>, std::map<unsigned int, RF> >(key,current_output) );
+
+            unsigned int highest_moment = traits.config().template get<unsigned int>("moments.highest");
+            // if this is the last ERT moments model, print output to file
+            if (modelNumber+1 == no_electrodes && k == highest_moment)
+            {
+              for (unsigned int moment = 0; moment <= highest_moment ; ++moment)
+              {
+                std::string filenamebase = traits.config().template get<std::string>("output.writeMomentsERTFilename","results");
+                if (traits.rank() == 0)
+                {
+                  std::cout << "printing ERT moment(" << moment <<") results" << std::endl;
+
+                  // print the temporal information to a timefile
+                  std::ofstream timefile;
+                  std::string timefilename = filenamebase + ".moments";
+                  if (clearFiles_MomentsERT)
+                  { 
+                    timefile.open(timefilename, std::ios::out | std::ios::trunc); // clear the file
+                    clearFiles_MomentsERT = false;
+                    timefile << "electrodes " << no_electrodes << std::endl;
+                    timefile << "processors " << traits.helper.size() << std::endl;
+                    timefile << "moments ";
+                  } else 
+                  {
+                    timefile.open(timefilename, std::ios::app); // append to file
+                  }
+                  timefile << " " << std::to_string(moment);
+                  timefile.close();
+                }
+
+                std::ofstream outfile;
+                std::string filename = filenamebase + "_" + std::to_string(moment) + "_" + std::to_string(traits.rank()) + ".data";
+
+                outfile.open(filename, std::ios::out | std::ios::trunc);
+                outfile << "injected_el measured_el potential" << std::endl;
+
+                // go through the collected data set -> get measured potentials for one injection
+                for (auto const & entry : output_MomentsERT_all_electrodes)
+                {
+                  for (auto const & measurement_electrode : entry.second)
+                  {
+                    unsigned int injection_electrode = entry.first.second;
+                    unsigned int meas_electrode = measurement_electrode.first;
+                    RF value = measurement_electrode.second;
+                    if (entry.first.first  == moment)
+                      outfile << injection_electrode << " " << meas_electrode << " " << value << std::endl;
+                  }
+                }
+                outfile.close();
+              }
+              output_MomentsERT_all_electrodes.clear(); // reset local storage of all ERT measurements
+            }
+            printTimer.stop();
+          }
       }; 
     };
 };

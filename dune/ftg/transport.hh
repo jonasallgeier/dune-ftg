@@ -191,7 +191,6 @@ namespace Dune {
             const std::shared_ptr<ModelParameters<Traits,ModelTypes::Geoelectrics> >& otherParams
             )
         {
-          // only needed for adjoint?
         }
 
         std::map<unsigned int, std::pair<RF, bool>> well_cells() const

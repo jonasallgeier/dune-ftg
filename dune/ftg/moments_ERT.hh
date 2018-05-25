@@ -39,22 +39,27 @@ namespace Dune {
         std::shared_ptr<const ModelParameters<Traits,ModelTypes::Geoelectrics> > geoelectricsParams;
 
         public:
-          unsigned int model_number = 0;
+          unsigned int model_number;
           unsigned int k;
 
         ModelParameters(const Traits& traits_, const std::string& name)
           : ModelParametersBase<Traits>(name), traits(traits_)
         {
           std::string str = name;
+          std::string common_base = "momentsERT_";
+          auto start_position_to_erase = str.find(common_base);
+          str.erase(start_position_to_erase, common_base.size());      
+          std::replace(str.begin(), str.end(), '_', ' ');
+
+
           std::stringstream ss; 
           ss << str;
           std::string temp;
-          
-          ss >> temp; // get rid of moments_ERT
-          ss >> temp; // get the moment number k
-          std::stringstream(temp) >> k;
+
           ss >> temp; // get the ERT model number
           std::stringstream(temp) >> model_number;
+          ss >> temp; // get the moment number k
+          std::stringstream(temp) >> k;
         }
 
         /**
@@ -77,6 +82,8 @@ namespace Dune {
          */
         void setParameterList(const std::shared_ptr<const typename Traits::ParameterList>& list)
         {
+          sigma_bgField = (*list).get("sigma_bg");
+          kappaField = (*list).get("kappa");
         }
 
         /**
@@ -371,30 +378,30 @@ namespace Dune {
               R& r_s, R& r_n) const
           {
             const RF faceVolume = ig.geometry().volume();
-            const Domain& cellCenterInside  = referenceElement(ig.inside() .geometry()).position(0,0);
-            const Domain& cellCenterOutside = referenceElement(ig.outside().geometry()).position(0,0);
+            const Domain& cellCenterInside  = referenceElement(ig.intersection().inside() .geometry()).position(0,0);
+            const Domain& cellCenterOutside = referenceElement(ig.intersection().outside().geometry()).position(0,0);
 
-            const RF sigma_inside  = parameters.sigma(ig.inside(),cellCenterInside,time);
-            const RF sigma_outside = parameters.sigma(ig.outside(),cellCenterOutside,time);
+            const RF sigma_inside  = parameters.sigma(ig.intersection().inside(),cellCenterInside,time);
+            const RF sigma_outside = parameters.sigma(ig.intersection().outside(),cellCenterOutside,time);
             const RF sigma_0 = havg(sigma_inside,sigma_outside);
 
-            RF left_part = faceVolume * sigma_0 * skeletonNormalDerivative(ig,x_s(lfsu_s,0),x_n(lfsu_n,0));
+            RF left_part = faceVolume * sigma_0 * skeletonNormalDerivative(ig.intersection(),x_s(lfsu_s,0),x_n(lfsu_n,0));
 
-            const RF c_moment_inside  = parameters.c_moment(ig.inside(),cellCenterInside,time);
-            const RF c_moment_outside = parameters.c_moment(ig.outside(),cellCenterOutside,time);
+            const RF c_moment_inside  = parameters.c_moment(ig.intersection().inside(),cellCenterInside,time);
+            const RF c_moment_outside = parameters.c_moment(ig.intersection().outside(),cellCenterOutside,time);
             const RF c_moment = havg(c_moment_inside,c_moment_outside);
 
-            const RF kappa_inside  = parameters.kappa(ig.inside(),cellCenterInside,time);
-            const RF kappa_outside = parameters.kappa(ig.outside(),cellCenterOutside,time);
+            const RF kappa_inside  = parameters.kappa(ig.intersection().inside(),cellCenterInside,time);
+            const RF kappa_outside = parameters.kappa(ig.intersection().outside(),cellCenterOutside,time);
             const RF kappa = havg(kappa_inside,kappa_outside);     
 
-            const RF potential_inside  = parameters.el_potential(ig.inside(),cellCenterInside,time);
-            const RF potential_outside = parameters.el_potential(ig.outside(),cellCenterOutside,time);
+            const RF potential_inside  = parameters.el_potential(ig.intersection().inside(),cellCenterInside,time);
+            const RF potential_outside = parameters.el_potential(ig.intersection().outside(),cellCenterOutside,time);
 
-            RF right_part = faceVolume * kappa * c_moment * skeletonNormalDerivative(ig,potential_inside,potential_outside);
+            RF right_part = faceVolume * kappa * c_moment * skeletonNormalDerivative(ig.intersection(),potential_inside,potential_outside);
 
-            r_s.accumulate(lfsv_s,0,  left_part );
-            r_n.accumulate(lfsv_n,0, -left_part );
+            r_s.accumulate(lfsv_s,0,   left_part+right_part  );
+            r_n.accumulate(lfsv_n,0, -(left_part+right_part) );
           }
 
         /**
@@ -406,6 +413,18 @@ namespace Dune {
               const LFSU& lfsu_s, const X& x_s, const LFSV& lfsv_s,
               R& r_s) const
           {
+            const IDomain& faceCenterLocal = referenceElement(ig.geometry()).position(0,0);
+
+            // evaluate boundary condition type
+            Dune::Modelling::BoundaryCondition::Type bc = boundary.bc(ig.intersection(),faceCenterLocal,time);
+            if (!Dune::Modelling::BoundaryCondition::isDirichlet(bc))
+              return;
+
+            // Dirichlet boundary conditions
+            const RF normalFlux = dirichletNormalFlux(ig.intersection(),x_s(lfsu_s,0),time);
+            const RF faceVolume = ig.geometry().volume();
+
+            r_s.accumulate(lfsv_s,0, normalFlux * faceVolume);
           }
 
         /**
@@ -433,6 +452,42 @@ namespace Dune {
 
             // approximation of gradient
             const RF w = (outerValue - innerValue)/distance;
+
+            return w;
+          }
+
+        /**
+         * @brief Flux in normal direction on Dirichlet boundary
+         */
+        template<typename Intersection>
+          RF dirichletNormalFlux(const Intersection& is, RF innerValue, RF time) const
+          {
+            // geometry information
+            const Domain&  cellCenterInside = referenceElement(is.inside().geometry()).position(0,0);
+
+            // conductivity
+            const RF sigma_0 = parameters.sigma(is.inside(),cellCenterInside,time);
+
+            return sigma_0 * dirichletNormalDerivative(is,innerValue,time);
+          }
+
+        /**
+         * @brief Derivative of solution in normal direction on Dirichlet boundary
+         */
+        template<typename Intersection>
+          RF dirichletNormalDerivative(const Intersection& is, RF innerValue, RF time) const
+          {
+            // geometry information
+            const IDomain& faceCenterLocal  = referenceElement(is.geometry()).position(0,0);
+
+            const RF faceVolume    = is          .geometry().volume();
+            const RF insideVolume  = is.inside() .geometry().volume();
+
+            const RF distance = insideVolume/faceVolume;
+
+            // approximation of gradient
+            const RF g = boundary.g(is,faceCenterLocal,time);
+            const RF w = (g - innerValue)/(distance/2.);
 
             return w;
           }

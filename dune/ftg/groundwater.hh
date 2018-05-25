@@ -80,13 +80,7 @@ namespace Dune {
          * @brief Provide access to measurement storage object
          */
         void setMeasurementList(const std::shared_ptr<const MeasurementList>& list)
-        {
-          //std::shared_ptr<SubMeasurements> groundwater_Measurement(new SubMeasurements());
-          //(*groundwater_Measurement).setTimes(1.00,2.44);          
-          // this is a way of interacting with the measurementlist, however it does not help yet...
-          //auto mysub = (*list).get("anything"); 
-          //(*mysub).extract(*forwardStorage,10,20);
-        }
+        {}
 
         RF timestep() const
         {
@@ -211,16 +205,6 @@ namespace Dune {
             return 0.;
           }
 
-        /**
-         * @brief Adjoint flux term based on measurements
-         */
-   /*     template<typename Intersection, typename IDomain, typename Time>
-          RF adjointFlux(const Intersection& is, const IDomain& x, const Time& t) const
-          {
-            // only needed for adjoint
-            return 0.;
-          }
-*/
         /**
          * @brief Make ModelParameters of different model available && make this model available for the others!
          */
@@ -547,32 +531,6 @@ namespace Dune {
             }
           }
 
-        /**
-         * @brief Skeleton integral independent of ansatz functions
-         */
-        // each face is only visited ONCE!
- /*       template<typename IG, typename LFSV, typename R>
-          void lambda_skeleton (const IG& ig, const LFSV& lfsv_s, const LFSV& lfsv_n, R& r_s, R& r_n) const
-          {
-            RF q = 0.;
-
-            Dune::GeometryType geometrytype = ig.geometry().type();
-            /// @todo order
-            const Dune::QuadratureRule<DF, dim-1>& rule = Dune::QuadratureRules<DF, dim-1>::rule(geometrytype, 1);
-
-            // loop over quadrature points 
-            for(const auto& point : rule) 
-            {
-              const IDomain& x = point.position();
-              const RF factor  = point.weight() * ig.geometry().integrationElement(x);
-
-              q += parameters.adjointFlux(ig.intersection(),x,time) * factor;
-            }
-
-            r_s.accumulate(lfsv_s,0, -q);
-            r_n.accumulate(lfsv_n,0,  q);
-          }
-*/
         /**
          * @brief Boundary integral independent of ansatz functions
          */

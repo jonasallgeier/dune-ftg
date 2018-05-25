@@ -341,7 +341,8 @@ namespace Dune {
           {
             out << "Models in list:" << std::endl;
             for(const ModelPair& pair : list)
-              out << pair.first << std::endl;
+              out << pair.first << "; ";
+            out << std::endl;
           }
 
         private:
