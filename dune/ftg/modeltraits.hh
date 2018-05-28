@@ -461,7 +461,12 @@ class ModelTraits
             // if this is the last ERT model print output to file
             if (modelNumber+1 == no_electrodes)
             {
-              std::string filenamebase = traits.config().template get<std::string>("output.writeERTFilename","results");
+              std::string filenamebase = traits.config().template get<std::string>("output.writeERTFilename","resultsERT");
+              if (traits.basePotentialEvaluation)
+              {
+                filenamebase = traits.config().template get<std::string>("output.writeERTBaseFilename","resultsERTbase");
+              }
+
               if (traits.rank() == 0)
               {
                 std::cout << "printing ERT results" << std::endl;
@@ -524,14 +529,14 @@ class ModelTraits
             std::map<unsigned int, RF> current_output;
             unsigned int no_electrodes = extraction_helper<Storage>(current_output,storage,time); // get the results of this model
             
-            std::string filenamebase = traits.config().template get<std::string>("output.writeTransportFilename","results");
+            std::string filenamebase = traits.config().template get<std::string>("output.writeTransportFilename","resultsTransport");
             if (traits.rank() == 0)
             {
               std::cout << "printing concentration moments results" << std::endl;
 
               // print the temporal information to a timefile
               std::ofstream timefile;
-              std::string timefilename = filenamebase + std::to_string(modelNumber) + ".times";
+              std::string timefilename = filenamebase + ".times";
 
               if (clearFiles_MomentsTransport)
               { 
@@ -539,6 +544,7 @@ class ModelTraits
                 clearFiles_MomentsTransport = false;
                 timefile << "electrodes " << no_electrodes << std::endl;
                 timefile << "processors " << traits.helper.size() << std::endl;
+                timefile << "times ";
               } else 
               {
                 timefile.open(timefilename, std::ios::app); // append to file
@@ -569,7 +575,7 @@ class ModelTraits
             std::map<unsigned int, RF> current_output;
             unsigned int no_electrodes = extraction_helper<Storage>(current_output,storage,time); // get the results of this model
             
-            std::string filenamebase = traits.config().template get<std::string>("output.writeMomentsTransportFilename","results");
+            std::string filenamebase = traits.config().template get<std::string>("output.writeMomentsTransportFilename","resultsMomentsTransport");
             if (traits.rank() == 0)
             {
               std::cout << "printing transport moment(" << modelNumber << ") results" << std::endl;
@@ -644,7 +650,7 @@ class ModelTraits
             {
               for (unsigned int moment = 0; moment <= highest_moment ; ++moment)
               {
-                std::string filenamebase = traits.config().template get<std::string>("output.writeMomentsERTFilename","results");
+                std::string filenamebase = traits.config().template get<std::string>("output.writeMomentsERTFilename","resultsMomentsERT");
                 if (traits.rank() == 0)
                 {
                   std::cout << "printing ERT moment(" << moment <<") results" << std::endl;

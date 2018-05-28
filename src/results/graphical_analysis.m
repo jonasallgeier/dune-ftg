@@ -58,82 +58,38 @@ function graphical_analysis_OpeningFcn(hObject, eventdata, handles, varargin)
 % needed for print button
 addpath('./export_fig');
 
-prompt = {'Number of electrodes','File of electrode coordinates','Number of combinations','Name of electrode configuration file','Results directory/basename'};
-title = 'Input';
-dims = [1 60];
-definput = {'144','electrode.configuration','4650','4_electrodes.txt','./data/longtestrun'};
-answer = inputdlg(prompt,title,dims,definput);
+[switches,Cancelled] = input_dialog_1;
+if Cancelled
+    error('User terminated.');
+end
+[user_input,Cancelled] = input_dialog_2(switches);
+if Cancelled
+    error('User terminated.');
+end
+
+%prompt = {'Number of electrodes','File of electrode coordinates','Number of combinations','Name of electrode configuration file','Results directory/basename'};
+%title = 'Input';
+%dims = [1 60];
+%definput = {'144','electrode.configuration','4650','4_electrodes.txt','./data/longtestrun'};
+%answer = inputdlg(prompt,title,dims,definput);
 
 
-handles.n_conf = str2num(answer{3});
-[~,handles.A_elec,handles.B_elec,handles.M_elec,handles.N_elec]=textread(answer{4},'%f %f %f %f %f',...
+handles.n_conf = str2num(user_input.n_comb);
+[~,handles.A_elec,handles.B_elec,handles.M_elec,handles.N_elec]=textread(user_input.file_combs,'%f %f %f %f %f',...
     handles.n_conf,'headerlines',1);
 
-[~,handles.X_elec,handles.Y_elec,handles.Z_elec,~]=textread(answer{2},'%f %f %f %f %d',...
-    str2num(answer{1}),'headerlines',1);
+[~,handles.X_elec,handles.Y_elec,handles.Z_elec,~]=textread(user_input.file_coords,'%f %f %f %f %d',...
+    str2num(user_input.n_el),'headerlines',1);
 
-%handles.Z_elec=-handles.Z_elec;
-%handles.X_elec=handles.X_elec-5;
-%handles.Y_elec=handles.Y_elec-5;
-
-%load workspace_after_solution.mat
-
-%fileID = fopen('test.txt','w');
-%N = 72;
-%fprintf(fileID,'%d %d %d\n',144,144,N);
-%for i = 1:N
-%fprintf(fileID,'%f ',phi_00);
-%end
-%fclose(fileID);
-
-%fileID = fopen('test.txt');
-%arraySize = str2num(fgetl(fileID));
-%data = str2num(fgetl(fileID));
-%fclose(fileID);
-
-timefilename = strcat(answer{5},'.times');
-fileID = fopen(timefilename,'r');
-% number of electrodes
-     tline = fgetl(fileID);
-     electrodes = textscan(tline,'%s %d');
-     no_electrodes = electrodes{2};
-% number of processors     
-     [~] = fgetl(fileID);
-     %processors = textscan(tline,'%s %d');
-     %no_processors = processors{2};
-% read timestamps
-    tline = fgetl(fileID);
-    x = textscan(tline(6:end),'%f');
-    times = x{1};
-fclose(fileID);
-
-
-data3d = NaN(no_electrodes,no_electrodes,length(times));
-
-textprogressbar('Reading the data ');
-for j = 1:length(times)
-    time = times(j);
-    filename = strcat(answer{5},'_',num2str(time),'.data');
-    data = importdata(filename);
-    for i = 1:size(data.data,1)
-        data3d(data.data(i,1),data.data(i,2),j) = data.data(i,3);
-    end
-    textprogressbar(100*j/(length(times)+1));
+handles = read_potentials_transient(user_input,handles);
+if switches.doPotentialsBase
+    handles = read_potentials_base(user_input,handles);
+end
+if switches.doPotentialsMoments
+   handles = read_potentials_moments(user_input,handles);
 end
 
-
-basedata = NaN(no_electrodes,no_electrodes);
-filename = strcat(answer{5},'_base.data');
-data = importdata(filename);
-for i = 1:size(data.data,1)
-    basedata(data.data(i,1),data.data(i,2)) = data.data(i,3);
-end
-textprogressbar(100);
-
-%handles.data3d = reshape(data,arraySize);
-handles.data3d = data3d;
-handles.basedata = basedata;
-handles.times = times;
+handles.switches = switches;
 % Choose default command line output for graphical_analysis
 handles.output = hObject;
 
@@ -369,25 +325,36 @@ set(handles.B_electrode,'String',num2str(handles.B_elec(val),'%d'));
 update_figure(handles);
 end
 
-
-
-
-
 function update_figure(handles)
 A = str2double(get(handles.A_electrode,'String'));
 M = str2double(get(handles.M_electrode,'String'));
 N = str2double(get(handles.N_electrode,'String'));
 B = str2double(get(handles.B_electrode,'String'));
 axes(handles.axes1);
-handles.current_ts=diff(handles.data3d(A,[M N],:)-handles.data3d(B,[M N],:));
-handles.current_base=diff(handles.basedata(A,[M N])-handles.basedata(B,[M N]));
-
+handles.current_ts=diff(handles.data3d_el_transient(A,[M N],:)-handles.data3d_el_transient(B,[M N],:));
+if handles.switches.doPotentialsBase
+    handles.current_base=diff(handles.basedata(A,[M N])-handles.basedata(B,[M N]));
+end
+if handles.switches.doPotentialsMoments
+    m0 = diff(handles.data3d_el_moments(A,[M N],1)-handles.data3d_el_moments(B,[M N],1));
+    m1 = diff(handles.data3d_el_moments(A,[M N],2)-handles.data3d_el_moments(B,[M N],2));
+    handles.current_arrivaltime=m1/m0;
+end
 %timevector = datetime(datevec(seconds(handles.times)));
 timevector = hours(handles.times/3600);
 hold off
 plot(timevector,reshape(handles.current_ts,[1,size(handles.current_ts,3)]),'kx-');%,'LineWidth',2);
-hold on
-plot([timevector(1),timevector(end)],[handles.current_base handles.current_base],'k--');%,'LineWidth',2);
+if handles.switches.doPotentialsBase
+    hold on
+    plot([timevector(1),timevector(end)],[handles.current_base handles.current_base],'k--');%,'LineWidth',2);
+end
+if handles.switches.doPotentialsMoments
+    hold on
+    handles.current_arrivaltime=m1/m0;
+    handles.current_arrivaltime = hours(handles.current_arrivaltime/3600);
+    plot([handles.current_arrivaltime,handles.current_arrivaltime],[min(handles.current_ts) max(handles.current_ts)],'r-');
+end
+
 %xlim([0 handles.times]);
 grid on;
 ylabel('\Delta\phi in V');

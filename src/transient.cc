@@ -54,9 +54,12 @@ void transient(int argc, char** argv, bool evaluateBasePotentials)
   using GeoelectricsModel = ForwardModel<ModelTraits,ModelTypes::Geoelectrics,Formulation::Stationary>;
 
   // insert groundwater and transport model into forward model list
-  forwardModelList.add<GroundwaterModel>("groundwaterFlow");
-  forwardModelList.add<TransportModel,GroundwaterModel>("soluteTransport",std::list<std::string>{"groundwaterFlow"});
-  
+  if (!modelTraits.basePotentialEvaluation)
+  {  
+    forwardModelList.add<GroundwaterModel>("groundwaterFlow");
+    forwardModelList.add<TransportModel,GroundwaterModel>("soluteTransport",std::list<std::string>{"groundwaterFlow"});
+  }
+
   set_electrodes<ModelTraits>(&modelTraits);
   set_wells<ModelTraits>(&modelTraits);
   
@@ -65,7 +68,10 @@ void transient(int argc, char** argv, bool evaluateBasePotentials)
   for (int i = 0; i < modelTraits.electrodeconfiguration.no_electrodes; i++)
   {
     std::string name = "ERT_" + std::to_string(i); //name for the n-th model is geoelectricsn
-    forwardModelList.add<GeoelectricsModel,TransportModel>(name,std::list<std::string>{"soluteTransport"}); //create a new geoelectrics model
+    if (!modelTraits.basePotentialEvaluation)
+      forwardModelList.add<GeoelectricsModel,TransportModel>(name,std::list<std::string>{"soluteTransport"}); //create a new geoelectrics model
+    else
+      forwardModelList.add<GeoelectricsModel>(name);
   }
   
   // print information about model list, avoid multiple outputs if run is parallel
@@ -84,8 +90,9 @@ void transient(int argc, char** argv, bool evaluateBasePotentials)
   if (helper.rank()== 0 && modelTraits.config().template get<bool>("output.unify_parallel_results",false))
   {
     if (modelTraits.config().template get<bool>("output.writeERT",false))
-      unify_geoelectrics_results<ModelTraits>(&modelTraits);
-    if (modelTraits.config().template get<bool>("output.writeTransport",false))
+      unify_ERT_results<ModelTraits>(&modelTraits);
+
+    if (modelTraits.config().template get<bool>("output.writeTransport",false) && !modelTraits.basePotentialEvaluation)
       unify_transport_results<ModelTraits>(&modelTraits);
   }
 
@@ -95,65 +102,6 @@ void transient(int argc, char** argv, bool evaluateBasePotentials)
     std::cout << "Total time elapsed: " << totalTimer.elapsed() << std::endl;
 }
 
-
-void printParameters(int argc, char** argv)
-{
-  Dune::MPIHelper& helper = Dune::MPIHelper::instance(argc, argv);
-
-  // read in configuration from .ini file
-  Dune::ParameterTree config;
-  Dune::ParameterTreeParser parser;
-  parser.readINITree("modelling.ini",config);
-   
-  // use double for coordinates and values, dim = 3;
-  using Traits = ModelTraits<double,double,3>;
-  using GridTraits = typename Traits::GridTraits;
-  using GV    = typename GridTraits::Grid::LeafGridView;
-  using DomainField = typename GridTraits::DomainField;
-  using RangeField  = typename GridTraits::RangeField;
-  using ParameterList   = Traits::ParameterList;
-  using ParameterField  = typename ParameterList::SubRandomField;
-
-  Traits   modelTraits(helper,config,false);  //this will also read in the electrode configuration file
-  std::shared_ptr<ParameterList>  parameterList  (new ParameterList(config.template get<std::string>("fields.location")));
-  std::shared_ptr<ParameterField> conductivityField;
-  conductivityField = (*parameterList).get(argv[2]);
-
-  const GV gv = modelTraits.grid().leafGridView();
-
-  auto glambda = [&](const Traits::GridTraits::Domain& x)
-  {
-    Traits::GridTraits::Scalar s;
-    (*conductivityField).evaluate(x,s);
-    if (std::string(argv[1]) == "--logprint")
-      s = log10(s);
-    return s;
-  };
-  auto g = Dune::PDELab::makeGridFunctionFromCallable(gv,glambda);
-
-  enum {dim = GridTraits::dim};
-
-  using FEM = Dune::PDELab::P0LocalFiniteElementMap<DomainField,RangeField,dim>;
-  using VBE = Dune::PDELab::istl::VectorBackend<Dune::PDELab::istl::Blocking::fixed,1>;
-  using CON = Dune::PDELab::P0ParallelConstraints;
-  using GFS = Dune::PDELab::GridFunctionSpace<GV,FEM,CON,VBE>;
-  using Z = Dune::PDELab::Backend::Vector<GFS,RangeField>; // A coefficient vector
-  using ZDGF = Dune::PDELab::DiscreteGridFunction<GFS,Z>; // Make a grid function out of it
-  using VTKF =  Dune::PDELab::VTKGridFunctionAdapter<ZDGF>;
-
-  FEM fem(Dune::GeometryType(Dune::GeometryType::cube,dim));
-  GFS gfs(gv,fem);
-  gfs.name(argv[2]);
-  Z z(gfs); // initial value
-  ZDGF zdgf(gfs,z);
-  Dune::PDELab::interpolate(g,gfs,z); // Fill the coefficient vector
-
-  Dune::SubsamplingVTKWriter<GV> vtkwriter(gv,0);
-  vtkwriter.addVertexData(std::shared_ptr<VTKF>(new VTKF(zdgf,"data")));
-  vtkwriter.pwrite(argv[2],"vtk","", Dune::VTK::appendedraw);
-}
-
-
 int main(int argc, char** argv)
 {
   try
@@ -162,16 +110,10 @@ int main(int argc, char** argv)
       transient(argc,argv,false); // try to run the problem
     else if (std::string(argv[1]) == "--basepotential")
       transient(argc,argv,true);
-    else if (std::string(argv[1]) == "--print")
-      printParameters(argc,argv);
-    else if (std::string(argv[1]) == "--logprint")
-      printParameters(argc,argv);
     else
       std::cout << "Possible options: \n"
-      << "      (no option) -> run dune-ftg model\n"
-      << "      --basepotential -> run dune-ftg model, but only the electrical base potential will be evaluated; therefore adjust the modelling.ini to equal time steps\n"
-      << "      --print [field] -> print parameter field as VTK\n"
-      << "      --logprint [field] -> print log of  parameter field as VTK\n"
+      << "      (no option) -> run transient model\n"
+      << "      --basepotential -> run transient model, but only the electrical base potential will be evaluated\n"
       << std::endl;
     return 0;
   }

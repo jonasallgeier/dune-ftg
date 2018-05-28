@@ -125,7 +125,12 @@ int main(int argc, char** argv)
 {
   try
   {
-    moments(argc,argv); // try to run the problem
+    if (argc==1)
+      moments(argc,argv); // try to run the problem
+    else
+      std::cout << "Possible options: \n"
+      << "      (no option) -> run moment model\n"
+      << std::endl;
     return 0;
   }
   catch (Dune::Exception &e)

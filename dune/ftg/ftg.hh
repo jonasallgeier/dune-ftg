@@ -130,8 +130,12 @@ void set_wells(auto modelTraits)
 template<typename ModelTraits>
 void unify_ERT_results(auto modelTraits)
 {
-  std::string filenamebase = modelTraits->config().template get<std::string>("output.writeERTFilename","results");
-  
+  std::string filenamebase = modelTraits->config().template get<std::string>("output.writeERTFilename","resultsERT");
+  if (modelTraits->basePotentialEvaluation)
+  {
+    filenamebase = modelTraits->config().template get<std::string>("output.writeERTBaseFilename","resultsERTBase");
+  }
+
   std::string timefilename = filenamebase + ".times";
   
   std::string temp;
@@ -198,7 +202,7 @@ void unify_ERT_results(auto modelTraits)
 
       if (modelTraits->basePotentialEvaluation)
       {
-        outfilename += ("_base.data");
+        outfilename += (".data");
       } else
       {
         outfilename += ("_" + timeString + ".data");
@@ -218,7 +222,7 @@ void unify_ERT_results(auto modelTraits)
 template<typename ModelTraits>
 void unify_transport_results(auto modelTraits)
 {
-  std::string filenamebase = modelTraits->config().template get<std::string>("output.writeTransportFilename","results");
+  std::string filenamebase = modelTraits->config().template get<std::string>("output.writeTransportFilename","resultsTransport");
   
   std::string timefilename = filenamebase + ".times";
  
@@ -282,7 +286,7 @@ void unify_transport_results(auto modelTraits)
 template<typename ModelTraits>
 void unify_momentsTransport_results(auto modelTraits)
 {
-  std::string filenamebase = modelTraits->config().template get<std::string>("output.writeMomentsTransportFilename","results");
+  std::string filenamebase = modelTraits->config().template get<std::string>("output.writeMomentsTransportFilename","resultsMomentsTransport");
   std::string timefilename = filenamebase + ".moments";
  
   std::string temp;
@@ -345,7 +349,7 @@ void unify_momentsTransport_results(auto modelTraits)
 template<typename ModelTraits>
 void unify_momentsERT_results(auto modelTraits)
 {
-  std::string filenamebase = modelTraits->config().template get<std::string>("output.writeMomentsERTFilename","results");
+  std::string filenamebase = modelTraits->config().template get<std::string>("output.writeMomentsERTFilename","resultsMomentsERT");
   
   std::string timefilename = filenamebase + ".moments";
   
