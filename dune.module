@@ -7,4 +7,4 @@ Module: dune-ftg
 Version: 0.1.0
 Maintainer: jonas-timon.allgeier@student.uni-tuebingen.de
 #depending on
-Depends: dune-common dune-modelling dune-randomfield
+Depends: dune-modelling dune-randomfield
