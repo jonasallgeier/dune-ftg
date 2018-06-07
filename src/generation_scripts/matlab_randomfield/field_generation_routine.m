@@ -103,7 +103,7 @@ for i = 1:subfields.number
 end
 
 
-%parpool('local',cm.number_of_processors);
+parpool('local',cm.number_of_processors);
 
 % create empty data container of size XxYxZ
 field_data = NaN(cm.cells);
