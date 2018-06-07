@@ -2,6 +2,8 @@ clear variables
 close all
 home
 
+cm.number_of_processors = 2;
+
 % directory information
 cm.outputfolder = ' ./'; % space in front is necessary!
 cm.outputtrunk = 'output/testing_ne_negative'; % all field files have this trunk in front of their name; it is not recommended to leave this empty

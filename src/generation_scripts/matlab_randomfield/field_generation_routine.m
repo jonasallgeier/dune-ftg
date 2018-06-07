@@ -92,13 +92,18 @@ for i = 1:subfields.number
     % environment variable LD_PRELOAD before starting matlab:
     % alias matlab='LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.21 /usr/local/bin/matlab -desktop'
     if isempty(cm.seed)
+        %command = strcat('mpirun -np ',32,num2str(cm.number_of_processors),32,cm.fieldgenerator_location,' ./',filename,' -input.seed 2 -output.dune ',cm.outputfolder,filebasename);
         command = strcat(cm.fieldgenerator_location,' ./',filename,' -input.seed 2 -output.dune ',cm.outputfolder,filebasename);
     else
         seed = floor(1e6*rand(1));
+        %command = strcat('mpirun -np ',32,num2str(cm.number_of_processors),32,cm.fieldgenerator_location,' ./',filename,' -input.seed ',32,num2str(seed),' -output.dune ',cm.outputfolder,filebasename);
         command = strcat(cm.fieldgenerator_location,' ./',filename,' -input.seed ',32,num2str(seed),' -output.dune ',cm.outputfolder,filebasename);
     end
     [~,~] = system(command,'-echo');
 end
+
+
+%parpool('local',cm.number_of_processors);
 
 % create empty data container of size XxYxZ
 field_data = NaN(cm.cells);
@@ -138,22 +143,31 @@ for i = 1:subfields.number
         z_bl = z_fine(1:end-1);
         z_br = z_fine(2:end);
         
-        for i_x = 1:cm.cells(1)
-            x_max = cm.vector_x(i_x+1);
-            x_min = cm.vector_x(i_x);
-            for i_y = 1:cm.cells(2)
-                y_max = cm.vector_y(i_y+1);
-                y_min = cm.vector_y(i_y);
-                for i_z = 1:sum(subfields.cells_in_layer(i,:))
-                    temp = find(subfields.cells_in_layer(i,:));
-                    current_cell = temp(i_z);
-                    
-                    z_max = cm.vector_z(current_cell+1);
-                    z_min = cm.vector_z(current_cell);
-                    
-                    
-                    
-                    %log = x_min<x_br & x_max>x_bl;
+        
+        
+        x_loop_vector = cm.cells(1);
+        y_loop_vector = cm.cells(2);
+        z_loop_vector = find(subfields.cells_in_layer(i,:),1):1:find(subfields.cells_in_layer(i,:),1,'last'); % gets the cell indices in vertical direction
+        
+        help_x_max = cm.vector_x(2:end);
+        help_x_min = cm.vector_x(1:end-1);
+        help_y_max = cm.vector_y(2:end);
+        help_y_min = cm.vector_y(1:end-1);
+        help_z_max = cm.vector_z(2:end);
+        help_z_min = cm.vector_z(1:end-1);
+        help_cells_in_layer = length(subfields.cells_in_layer(i,:));
+        
+        parfor i_x = 1:x_loop_vector
+            x_max = help_x_max(i_x);
+            x_min = help_x_min(i_x);
+            temp_matrix = NaN(length(y_loop_vector),help_cells_in_layer);
+            for i_y = 1:y_loop_vector
+                y_max = help_y_max(i_y);
+                y_min = help_y_min(i_y);
+                for i_z = z_loop_vector % i_z indicates the current cell index in vertical direction
+                    z_max = help_z_max(i_z);
+                    z_min = help_z_min(i_z);
+
                     temp_1 = (x_br-x_min)/delta_x;
                     temp_1(temp_1>1) = 1;
                     temp_1(temp_1<0) = 0;
@@ -188,20 +202,18 @@ for i = 1:subfields.number
                     
                     weights = weights_x.*weights_y.*weights_z;
                     weights = weights(:,:,find(z_fine(2:end)>z_layermin,1):end);
-                    %sel_x = x_cell_midpoints(weights_x>0);
-                    %sel_y = y_cell_midpoints(weights_y>0);
-                    
-                    %sel_x = (x_fine(2:end)<=x_max & x_fine(2:end)>x_min);
-                    %sel_y = (y_fine(2:end)<=y_max & y_fine(2:end)>y_min);
-                    %sel_z = (z_fine(2:end)<=z_max & z_fine(2:end)>z_min);
-                    
-                    %sel_z = sel_z(find(z_fine(2:end)>z_layermin,1):end);
                     
                     selection = data(weights>0);
                     weights = weights(weights>0);
-                    field_data(i_x,i_y,current_cell) = weighted_mean(selection,weights);
+                    
+                    X_vec = reshape(selection,[1,size(selection,1)*size(selection,2)*size(selection,3)]);
+                    weights_vec = reshape(weights,[1,size(weights,1)*size(weights,2)*size(weights,3)]);
+                    average = sum(weights_vec.*X_vec)./sum(weights_vec);
+                    
+                    temp_matrix(i_y,i_z) = average;
                 end
             end
+            field_data(i_x,:,z_loop_vector) = temp_matrix(:,z_loop_vector);
         end
     end
     delete(strcat(filebasename,'.stoch.h5'))

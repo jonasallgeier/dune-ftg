@@ -137,8 +137,12 @@ namespace Dune {
               std::cout << "ModelParameters::kappa " << this->name() << " " << this << std::endl;
               DUNE_THROW(Dune::Exception,"kappa field not set in geoelectrics model parameters");
             }
-            typename Traits::GridTraits::Scalar kappa;
-            (*kappaField).evaluate(elem,x,kappa);
+            // read constant kappa from file; if not there try looking for field
+            typename Traits::GridTraits::Scalar kappa = -5.0;
+            kappa = traits.config().template get<RF>("parameters.kappa",kappa);
+            if (kappa == -5.0)
+              (*kappaField).evaluate(elem,x,kappa);
+
             return kappa[0];
           }
 

@@ -114,8 +114,11 @@ namespace Dune {
             if (!porosityField)
               DUNE_THROW(Dune::Exception,"porosity field not set in transport model parameters");
 
-            typename Traits::GridTraits::Scalar output;
-            (*porosityField).evaluate(x,output);
+            // read constant porosity from file; if not there try looking for field
+            typename Traits::GridTraits::Scalar output = -5.0;
+            output = traits.config().template get<RF>("parameters.porosity",output);
+            if (output == -5.0)
+              (*porosityField).evaluate(x,output);
             return output[0];
           }
 	

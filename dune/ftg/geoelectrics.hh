@@ -151,8 +151,11 @@ namespace Dune {
               DUNE_THROW(Dune::Exception,"kappa or sigma_bg field not set in geoelectrics model parameters");
             }
 
-            typename Traits::GridTraits::Scalar kappa;
-            (*kappaField).evaluate(elem,x,kappa);
+            // read constant kappa from file; if not there try looking for field
+            typename Traits::GridTraits::Scalar kappa = -5.0;
+            kappa = traits.config().template get<RF>("parameters.kappa",kappa);
+            if (kappa == -5.0)
+              (*kappaField).evaluate(elem,x,kappa);
 
             typename Traits::GridTraits::Scalar sigma_bg;
             (*sigma_bgField).evaluate(elem,x,sigma_bg);           
