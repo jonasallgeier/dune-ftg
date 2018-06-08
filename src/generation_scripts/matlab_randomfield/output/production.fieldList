@@ -1,6 +1,6 @@
 [ grid ]
 extensions = "100.00 70.00 20.00"
-cells = "192 96 96"
+cells = "70 40 6"
 
 [ randomField ]
 types = "conductivity sigma_bg"

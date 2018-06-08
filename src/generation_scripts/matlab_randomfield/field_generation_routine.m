@@ -106,8 +106,10 @@ for i = 1:subfields.number
     [~,~] = system(command,'-echo');
 end
 
-
-parpool('local',cm.number_of_processors);
+pool = gcp('nocreate');
+if isempty(pool)
+    parpool(cm.number_of_processors);
+end
 
 % create empty data container of size XxYxZ
 field_data = NaN(cm.cells);
@@ -161,7 +163,7 @@ for i = 1:subfields.number
         help_z_min = cm.vector_z(1:end-1);
         help_cells_in_layer = length(subfields.cells_in_layer(i,:));
         
-        parfor i_x = 1:x_loop_vector
+        for i_x = 1:x_loop_vector
             x_max = help_x_max(i_x);
             x_min = help_x_min(i_x);
             temp_matrix = NaN(length(y_loop_vector),help_cells_in_layer);
