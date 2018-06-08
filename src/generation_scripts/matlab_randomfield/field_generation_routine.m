@@ -13,6 +13,10 @@ if ~cm.isequidistant
     y_fine = min(cm.vector_y):delta_y:max(cm.vector_y);
     z_fine = min(cm.vector_z):delta_z:max(cm.vector_z);
     
+    x_fine = round(x_fine,4);
+    y_fine = round(y_fine,4);
+    z_fine = round(z_fine,4);
+    
     if max(x_fine) ~= max(cm.vector_x) || max(y_fine) ~= max(cm.vector_y) || max(z_fine) ~= max(cm.vector_z)
         warning(['At least one extent is not an integer multiple of the smalles mesh size in the respective' ...
             ' direction. The field will still be generated, but inaccuracies are possible.']);

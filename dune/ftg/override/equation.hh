@@ -299,8 +299,15 @@ namespace Dune {
 
             oldSolution = newSolution;
 
+
+
+            // only save transport results at ERT measurement times          
+            RF current_time = time;
+            bool timeforTransport = (std::fmod(current_time, traits.config().template get<RF>("time.step_ERT"))  == 0);
+            bool isTransport        = (parameters.name().find("soluteTransport") == 0);
+
             // print solution if selected
-            if (traits.config().template get<bool>("output.writeVTK",false))
+            if (traits.config().template get<bool>("output.writeVTK",false) || (isTransport && timeforTransport))
             {
               printTimer.start();
               
