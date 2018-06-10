@@ -140,7 +140,7 @@ for i = 1:subfields.number
         %mid point of cell
         %x_cell_midpoints = 0.5*delta_x+min(x_fine):delta_x:max(x_fine)-0.5*delta_x;
         %y_cell_midpoints = 0.5*delta_y+min(y_fine):delta_y:max(y_fine)-0.5*delta_y;
-        z_cell_midpoints = 0.5*delta_z+min(z_fine):delta_z:max(z_fine)-0.5*delta_z;
+        %z_cell_midpoints = 0.5*delta_z+min(z_fine):delta_z:max(z_fine)-0.5*delta_z;
         %left & right boundary of cell
         x_bl = x_fine(1:end-1);
         x_br = x_fine(2:end);
@@ -149,10 +149,12 @@ for i = 1:subfields.number
         z_bl = z_fine(1:end-1);
         z_br = z_fine(2:end);
         
+        z_bl = z_bl(find(z_fine(2:end)>z_layermin,1):end);
+        z_br = z_br(find(z_fine(2:end)>z_layermin,1):end);
         
         
-        x_loop_vector = cm.cells(1);
-        y_loop_vector = cm.cells(2);
+        x_loop_vector = 1:cm.cells(1);
+        y_loop_vector = 1:cm.cells(2);
         z_loop_vector = find(subfields.cells_in_layer(i,:),1):1:find(subfields.cells_in_layer(i,:),1,'last'); % gets the cell indices in vertical direction
         
         help_x_max = cm.vector_x(2:end);
@@ -163,35 +165,37 @@ for i = 1:subfields.number
         help_z_min = cm.vector_z(1:end-1);
         help_cells_in_layer = length(subfields.cells_in_layer(i,:));
         
-        for i_x = 1:x_loop_vector
+        parfor i_x = x_loop_vector
             x_max = help_x_max(i_x);
             x_min = help_x_min(i_x);
             temp_matrix = NaN(length(y_loop_vector),help_cells_in_layer);
-            for i_y = 1:y_loop_vector
+                     
+            temp_1 = (x_br-x_min)/delta_x;
+            temp_1(temp_1>1) = 1;
+            temp_1(temp_1<0) = 0;           
+            temp_2 = (x_max-x_bl)/delta_x;
+            temp_2(temp_2>1) = 1;
+            temp_2(temp_2<0) = 0;
+            weights_x = temp_1.*temp_2;
+            %weights_x = repmat(weights_x',[1,size(data,2),length(z_cell_midpoints)]);            
+            
+            for i_y = y_loop_vector
                 y_max = help_y_max(i_y);
                 y_min = help_y_min(i_y);
+                temp_1 = (y_br-y_min)/delta_y;
+                temp_1(temp_1>1) = 1;
+                temp_1(temp_1<0) = 0;
+
+                temp_2 = (y_max-y_bl)/delta_y;
+                temp_2(temp_2>1) = 1;
+                temp_2(temp_2<0) = 0;
+                weights_y = temp_1.*temp_2;                
+                %weights_y = repmat(weights_y,[size(data,1),1,length(z_cell_midpoints)]);
+                    
                 for i_z = z_loop_vector % i_z indicates the current cell index in vertical direction
                     z_max = help_z_max(i_z);
                     z_min = help_z_min(i_z);
 
-                    temp_1 = (x_br-x_min)/delta_x;
-                    temp_1(temp_1>1) = 1;
-                    temp_1(temp_1<0) = 0;
-                    
-                    temp_2 = (x_max-x_bl)/delta_x;
-                    temp_2(temp_2>1) = 1;
-                    temp_2(temp_2<0) = 0;
-                    weights_x = temp_1.*temp_2;
-                    
-                    temp_1 = (y_br-y_min)/delta_y;
-                    temp_1(temp_1>1) = 1;
-                    temp_1(temp_1<0) = 0;
-                    
-                    temp_2 = (y_max-y_bl)/delta_y;
-                    temp_2(temp_2>1) = 1;
-                    temp_2(temp_2<0) = 0;
-                    weights_y = temp_1.*temp_2;
-                    
                     temp_1 = (z_br-z_min)/delta_z;
                     temp_1(temp_1>1) = 1;
                     temp_1(temp_1<0) = 0;
@@ -200,26 +204,27 @@ for i = 1:subfields.number
                     temp_2(temp_2>1) = 1;
                     temp_2(temp_2<0) = 0;
                     weights_z = temp_1.*temp_2;
+                    %weights_z = weights_z();
                     
-                    weights_x = repmat(weights_x',[1,size(data,2),length(z_cell_midpoints)]);
-                    weights_y = repmat(weights_y,[size(data,1),1,length(z_cell_midpoints)]);
-                    weights_z = reshape(weights_z,[1,1,length(z_cell_midpoints)]);
-                    weights_z = repmat(weights_z,[size(data,1),size(data,2),1]);
+                    %weights_z = reshape(weights_z,[1,1,length(z_cell_midpoints)]);
+                    %weights_z = repmat(weights_z,[size(data,1),size(data,2),1]);
                     
-                    weights = weights_x.*weights_y.*weights_z;
-                    weights = weights(:,:,find(z_fine(2:end)>z_layermin,1):end);
+                    %weights = weights_x.*weights_y.*weights_z;
+                    %weights = weights(:,:,find(z_fine(2:end)>z_layermin,1):end);
                     
-                    selection = data(weights>0);
-                    weights = weights(weights>0);
+                    %selection = data(weights>0);
+                    %weights = weights(weights>0);
                     
-                    X_vec = reshape(selection,[1,size(selection,1)*size(selection,2)*size(selection,3)]);
-                    weights_vec = reshape(weights,[1,size(weights,1)*size(weights,2)*size(weights,3)]);
-                    average = sum(weights_vec.*X_vec)./sum(weights_vec);
+                    %X_vec = reshape(selection,[1,size(selection,1)*size(selection,2)*size(selection,3)]);
+                    %weights_vec = reshape(weights,[1,size(weights,1)*size(weights,2)*size(weights,3)]);
+                    %average = sum(weights_vec.*X_vec)./sum(weights_vec);
                     
-                    temp_matrix(i_y,i_z) = average;
+                    %temp_matrix(i_y,i_z) = selection'*weights/sum(sum(sum(weights)));
+                    temp_matrix(i_y,i_z) = mean(mean(mean(data(weights_x>0,weights_y>0,weights_z>0))));
                 end
             end
             field_data(i_x,:,z_loop_vector) = temp_matrix(:,z_loop_vector);
+            fprintf('%.3f\n',i_x./length(x_loop_vector));
         end
     end
     delete(strcat(filebasename,'.stoch.h5'))
