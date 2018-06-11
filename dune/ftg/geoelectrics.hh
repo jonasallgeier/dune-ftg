@@ -144,19 +144,24 @@ namespace Dune {
         template<typename Element, typename Domain, typename Time>
           RF cond (const Element& elem, const Domain& x, const Time& time) const
           {
-            
-            if (!kappaField || !sigma_bgField)
-            {
-              std::cout << "ModelParameters::cond " << this->name() << " " << this << std::endl;
-              DUNE_THROW(Dune::Exception,"kappa or sigma_bg field not set in geoelectrics model parameters");
-            }
-
             // read constant kappa from file; if not there try looking for field
             typename Traits::GridTraits::Scalar kappa = -5.0;
             kappa = traits.config().template get<RF>("parameters.kappa",kappa);
             if (kappa == -5.0)
+            {
+              if (!kappaField)
+              {
+                std::cout << "ModelParameters::cond " << this->name() << " " << this << std::endl;
+                DUNE_THROW(Dune::Exception,"kappa field not set in geoelectrics model parameters");
+              }
               (*kappaField).evaluate(elem,x,kappa);
+            }
 
+            if (!sigma_bgField)
+            {
+              std::cout << "ModelParameters::cond " << this->name() << " " << this << std::endl;
+              DUNE_THROW(Dune::Exception,"sigma_bg not set in geoelectrics model parameters");
+            }
             typename Traits::GridTraits::Scalar sigma_bg;
             (*sigma_bgField).evaluate(elem,x,sigma_bg);           
 

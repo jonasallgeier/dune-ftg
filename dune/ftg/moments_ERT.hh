@@ -132,17 +132,18 @@ namespace Dune {
         template<typename Element, typename Domain, typename Time>
           RF kappa (const Element& elem, const Domain& x, const Time& time) const
           {
-            if (!kappaField)
-            {
-              std::cout << "ModelParameters::kappa " << this->name() << " " << this << std::endl;
-              DUNE_THROW(Dune::Exception,"kappa field not set in geoelectrics model parameters");
-            }
             // read constant kappa from file; if not there try looking for field
             typename Traits::GridTraits::Scalar kappa = -5.0;
             kappa = traits.config().template get<RF>("parameters.kappa",kappa);
             if (kappa == -5.0)
+            {
+              if (!kappaField)
+              {
+                std::cout << "ModelParameters::kappa " << this->name() << " " << this << std::endl;
+                DUNE_THROW(Dune::Exception,"kappa field not set in geoelectrics model parameters");
+              }
               (*kappaField).evaluate(elem,x,kappa);
-
+            }
             return kappa[0];
           }
 

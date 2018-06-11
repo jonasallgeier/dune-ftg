@@ -119,18 +119,19 @@ namespace Dune {
         template<typename Domain>
           RF porosity(const Domain& x) const
           {
-            if (!porosityField)
-              DUNE_THROW(Dune::Exception,"porosity field not set in transport model parameters");
-
             // read constant porosity from file; if not there try looking for field
             typename Traits::GridTraits::Scalar output = -5.0;
             output = traits.config().template get<RF>("parameters.porosity",output);
             if (output == -5.0)
+            {
+              if (!porosityField)
+                DUNE_THROW(Dune::Exception,"porosity field not set in transport model parameters");
               (*porosityField).evaluate(x,output);
+            }
             return output[0];
           }
 	
-	/**
+	    /**
          * @brief Concentration at given position;
          */
         template<typename Element, typename Domain, typename Time>
