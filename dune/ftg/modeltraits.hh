@@ -532,7 +532,7 @@ class ModelTraits
             std::string filenamebase = traits.config().template get<std::string>("output.writeTransportFilename","resultsTransport");
             if (traits.rank() == 0)
             {
-              std::cout << "printing concentration moments results" << std::endl;
+              std::cout << "printing concentration results" << std::endl;
 
               // print the temporal information to a timefile
               std::ofstream timefile;
