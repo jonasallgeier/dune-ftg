@@ -66,8 +66,8 @@ namespace Dune {
 
           virtual void solveForward() = 0;
           virtual void stepForward(typename Traits::GridTraits::RangeField timestep) = 0;
-          virtual typename Traits::GridTraits::RangeField suggestTimestepForward() const = 0;
           virtual void clearStorage() = 0;
+          virtual typename Traits::GridTraits::RangeField suggestTimestepForward() const = 0;
           virtual bool forwardFinished() const = 0;
           virtual typename Traits::GridTraits::RangeField getTime() const = 0;
       };
@@ -200,17 +200,16 @@ namespace Dune {
           using ModelVector = std::vector<std::pair<std::string, std::shared_ptr<ModelBase<Traits> > > >;
 
           const Traits& traits;
-
+          unsigned int highest_moment;
           ModelVector list;
-
           std::vector<bool> isInitialized;
         public:
 
           /**
            * @brief Constructor
            */
-          ForwardModelList(const Traits& traits_)
-            : traits(traits_)
+          ForwardModelList(const Traits& traits_,unsigned int highest_moment_)
+            : traits(traits_), highest_moment(highest_moment_)
           {}
 
           /**
@@ -230,6 +229,7 @@ namespace Dune {
               // create model and insert it in list
               const std::shared_ptr<Model> model(new Model(traits,name));
               list.push_back({name,model});
+
               isInitialized.push_back(false);
 
               // register parameters of given models in each other
@@ -261,75 +261,46 @@ namespace Dune {
           {
             //initForward(parameterList,measurementList,ertMatrixContainer);
 
-            while (!forwardFinished())
-            {
+            //while (!forwardFinished())
+            //{
               using RF = typename Traits::GridTraits::RangeField;
 
-              for (unsigned int i = 0; i!=list.size()-1;i++) // minus one! -> last model will step
+              for (unsigned int i = 0; i!=list.size();i++)
               {
                 if (isInitialized[i] == false)
                 {
                   list[i].second->initForward(parameterList,measurementList,ertMatrixContainer);
                   isInitialized[i] = true;
                 }
+                RF timestep = list[i].second->suggestTimestepForward();
+                list[i].second->stepForward(timestep);
+                
+                // if the last moment model for an electrode was evaluated -> empty the storages!
+                if (list[i].first.find("momentsERT_") == 0)
+                {
+                  std::string str = list[i].first;
+                  std::string common_base = "momentsERT_";
+                  auto start_position_to_erase = str.find(common_base);
+                  str.erase(start_position_to_erase, common_base.size());      
+                  std::replace(str.begin(), str.end(), '_', ' ');
 
-                if (list[i].second->forwardFinished() == false)
-                {  
-                  RF timestep = list[i].second->suggestTimestepForward();
-                  RF time = list[i].second->getTime();
+                  std::stringstream ss; 
+                  ss << str;
+                  std::string temp;
 
-                  if (isInitialized[i+1] == false)
+                  ss >> temp; // get the ERT model number
+                  ss >> temp; // get the moment number k
+                  unsigned int k;
+                  std::stringstream(temp) >> k; 
+
+                  if (k==highest_moment)
                   {
-                    list[i+1].second->initForward(parameterList,measurementList,ertMatrixContainer);
-                    isInitialized[i+1] = true;
-                  }
-
-                  RF time_needed = list[i+1].second->getTime()+list[i+1].second->suggestTimestepForward();
-                  
-                  while (time < time_needed)
-                  {
-                    list[i].second->stepForward(timestep);
-                    time = list[i].second->getTime();
-                    // ERT data can be deleted after measurements, as they are not needed anymore
-                    bool isERT = (list[i].first.find("ERT") == 0);
-                    if (isERT && (traits.basePotentialEvaluation==false)) // moments ERT need ERT base data!
-                      list[i].second->clearStorage();
+                    for (unsigned int j = 0; j<=highest_moment;j++)
+                      list[i-j].second->clearStorage();
+                    list[i-highest_moment-1].second->clearStorage();
                   }
                 }
-              }
-              
-              if (list.back().second->forwardFinished() == false && list.size() != 1)
-              {
-                if (isInitialized.back() == false)
-                {
-                  list.back().second->initForward(parameterList,measurementList,ertMatrixContainer);
-                  isInitialized.back() = true;
-                }
-                RF timestep = list.back().second->suggestTimestepForward();
-                RF time = list.back().second->getTime();
-                while (time+timestep <= list.rbegin()[1].second->getTime() && !forwardFinished())
-                {
-                  list.back().second->stepForward(timestep);
-                  time = list.back().second->getTime();
-                  // ERT data can be deleted after measurements, as they are not needed anymore
-                  bool isERT = (list.back().first.find("ERT") == 0);
-                  if (isERT && (traits.basePotentialEvaluation==false)) // moments ERT need ERT base data!
-                    list.back().second->clearStorage();
-                }
-              } else if (list.back().second->forwardFinished() == false && list.size() == 1)
-              {
-                if (isInitialized.back() == false)
-                {
-                  list.back().second->initForward(parameterList,measurementList,ertMatrixContainer);
-                  isInitialized.back() = true;
-                }
-                RF timestep = list.back().second->suggestTimestepForward();
-                list.back().second->stepForward(timestep);
-                // ERT data can be deleted after measurements, as they are not needed anymore
-                bool isERT = (list.back().first.find("ERT") == 0);
-                if (isERT && (traits.basePotentialEvaluation==false)) // moments ERT need ERT base data!
-                  list.back().second->clearStorage();
-              }
+              //}
             }
           }
 

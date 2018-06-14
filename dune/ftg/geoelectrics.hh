@@ -26,12 +26,11 @@ namespace Dune {
         using ParameterList   = typename Traits::ParameterList;
         using ParameterField  = typename ParameterList::SubRandomField;
         using MeasurementList = typename Traits::MeasurementList;
-        //using SubMeasurements = typename MeasurementList::SubMeasurements;
 
         const Traits& traits;
 
         std::shared_ptr<SolutionStorage<Traits,ModelTypes::Geoelectrics,Direction::Forward> > forwardStorage;
-        std::shared_ptr<SolutionStorage<Traits,ModelTypes::Geoelectrics,Direction::Adjoint> > adjointStorage;
+        //std::shared_ptr<SolutionStorage<Traits,ModelTypes::Geoelectrics,Direction::Adjoint> > adjointStorage;
 
         std::shared_ptr<ParameterField> sigma_bgField;
         std::shared_ptr<ParameterField> kappaField;
@@ -74,12 +73,12 @@ namespace Dune {
         /**
          * @brief Set internal storage object for adjoint solution
          */
-        void setStorage(
+        /*void setStorage(
             const std::shared_ptr<SolutionStorage<Traits,ModelTypes::Geoelectrics,Direction::Adjoint> > storage
             )
         {
           adjointStorage = storage;
-        }
+        }*/
 
         /**
          * @brief Provide access to underlying parameter fields
@@ -145,7 +144,7 @@ namespace Dune {
           RF cond (const Element& elem, const Domain& x, const Time& time) const
           {
             // read constant kappa from file; if not there try looking for field
-            typename Traits::GridTraits::Scalar kappa = -5.0;
+            typename Traits::GridTraits::Scalar kappa = -5.0; // TODO there must be a better way to do this!
             kappa = traits.config().template get<RF>("parameters.kappa",kappa);
             if (kappa == -5.0)
             {
@@ -165,7 +164,7 @@ namespace Dune {
             typename Traits::GridTraits::Scalar sigma_bg;
             (*sigma_bgField).evaluate(elem,x,sigma_bg);           
 
-            //transform concentration to an electric conductivity
+            // transform concentration to an electric conductivity, unless base potential evaluation
             if (traits.basePotentialEvaluation)
               return sigma_bg[0];
             return (*transportParams).concentration(elem,x,time)*kappa[0]+sigma_bg[0];
@@ -217,25 +216,23 @@ namespace Dune {
         /**
          * @brief Adjoint source term based on measurements
          */
-        template<typename Element, typename Domain, typename Time>
+        /*template<typename Element, typename Domain, typename Time>
           RF adjointSource(const Element& elem, const Domain& x, const Time& t) const
           {
-            // only needed for adjoint
             return 0.;
-          }
+          }*/
 
         /**
          * @brief Adjoint flux term based on measurements
          */
-        template<typename Intersection, typename IDomain, typename Time>
+        /*template<typename Intersection, typename IDomain, typename Time>
           RF adjointFlux(const Intersection& is, const IDomain& x, const Time& t) const
           {
-            // only needed for adjoint
             return 0.;
-          }
+          }*/
 
         /**
-         * @brief Make ModelParameters of different model available //jonas
+         * @brief Make ModelParameters of different model available
          */
         void registerModel(
             const std::string& name,
@@ -254,7 +251,7 @@ namespace Dune {
       };
 
     /**
-     * @brief Equation traits class for forward / adjoint geoelectrics equation
+     * @brief Equation traits class for forward geoelectrics equation
      */
     template<typename Traits, typename DirectionType>
       class EquationTraits<Traits, ModelTypes::Geoelectrics, DirectionType>
@@ -281,7 +278,7 @@ namespace Dune {
           // use linear solver in stationary case,
           // implicit linear solver for transient case
           template<typename... T>
-            using StationarySolver = StationaryLinearSolver_CG_AMG_SSOR<T...>;
+            using StationarySolver = StationaryLinearSolver_CG_AMG_SSOR_reuse_matrix<T...>; // solver is modified for ERT matrix storage
           template<typename... T>
             using TransientSolver  = ImplicitLinearSolver<T...>;
 
@@ -326,7 +323,7 @@ namespace Dune {
       };
 
     /**
-     * @brief Class representing initial condition for geoelectrics
+     * @brief Class representing guess condition for geoelectrics
      */
     template<typename Traits>
       class InitialValue<Traits, ModelTypes::Geoelectrics>
@@ -346,7 +343,7 @@ namespace Dune {
           template<typename Domain, typename Value>
             void evaluateGlobal(const Domain& x, Value& y) const
             {
-              // homogeneous initial conditions
+              // homogeneous guess conditions
               y = 0.;
             }
       };
@@ -390,7 +387,7 @@ namespace Dune {
     /**
      * @brief Source term of adjoint geoelectrics equation
      */
-    template<typename Traits>
+    /*template<typename Traits>
       class SourceTerm<Traits, ModelTypes::Geoelectrics, Direction::Adjoint>
       {
         const ModelParameters<Traits,ModelTypes::Geoelectrics>& parameters;
@@ -407,7 +404,7 @@ namespace Dune {
             // adjoint source depends on parameters / measurements
             return parameters.adjointSource(elem,x,t);
           }
-      };
+      };*/
 
     /**
      * @brief Define geoelectrics equation as a differential equation
@@ -452,7 +449,8 @@ namespace Dune {
         enum {doAlphaSkeleton  = true};
         enum {doAlphaBoundary  = true};
         enum {doLambdaVolume   = true};
-        enum {doLambdaSkeleton = DirectionType::isAdjoint()};
+        //enum {doLambdaSkeleton = DirectionType::isAdjoint()};
+        enum {doLambdaSkeleton = false};
         enum {doLambdaBoundary = true};
 
         private:
@@ -523,7 +521,7 @@ namespace Dune {
             const Domain& cellCenterLocal = referenceElement(eg.geometry()).position(0,0);
             r.accumulate(lfsv,0, - sourceTerm.q(eg.entity(),cellCenterLocal,time));
 
-            if (DirectionType::isAdjoint())
+            /*if (DirectionType::isAdjoint())
             {
               RF q = 0.;
 
@@ -541,14 +539,14 @@ namespace Dune {
               }
 
               r.accumulate(lfsv,0, -q);
-            }
+            }*/
           }
 
         /**
          * @brief Skeleton integral independent of ansatz functions
          */
         // each face is only visited ONCE!
-        template<typename IG, typename LFSV, typename R>
+        /*template<typename IG, typename LFSV, typename R>
           void lambda_skeleton (const IG& ig, const LFSV& lfsv_s, const LFSV& lfsv_n, R& r_s, R& r_n) const
           {
             RF q = 0.;
@@ -568,7 +566,7 @@ namespace Dune {
 
             r_s.accumulate(lfsv_s,0, -q);
             r_n.accumulate(lfsv_n,0,  q);
-          }
+          }*/
 
         /**
          * @brief Boundary integral independent of ansatz functions

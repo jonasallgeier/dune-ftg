@@ -5,6 +5,7 @@
 # include "config.h"
 #endif
 #include <iostream>
+#include <time.h>
 
 #include <dune/common/parallel/mpihelper.hh>
 #include <dune/common/exceptions.hh>
@@ -14,15 +15,15 @@
 #include<dune/ftg/override/equation.hh>
 #include<dune/ftg/override/forwardmodel.hh>
 
-#include<dune/modelling/forwardmodel.hh>
-#include<dune/modelling/forwardadjointmodel.hh>
+//#include<dune/modelling/forwardmodel.hh>
+//#include<dune/modelling/forwardadjointmodel.hh>
 
 #include<dune/ftg/modeltraits.hh>
 #include<dune/ftg/groundwater.hh>
 #include<dune/ftg/transport.hh>
 #include<dune/ftg/geoelectrics.hh>
 #include<dune/ftg/ftg.hh>
-#include<dune/pdelab/function/callableadapter.hh>
+//#include<dune/pdelab/function/callableadapter.hh>
 
 using namespace Dune::Modelling;
 
@@ -42,7 +43,7 @@ void transient(int argc, char** argv, bool evaluateBasePotentials)
   // use double for coordinates and values, dim = 3;
   using ModelTraits = ModelTraits<double,double,3>;
 
-  ModelTraits   modelTraits(helper,config,evaluateBasePotentials);  //this will also read in the electrode configuration file
+  ModelTraits modelTraits(helper,config,evaluateBasePotentials);  // this will also read in the configurations (wells/electrodes)
   
   // define forward model
   using ForwardModelList = ForwardModelList<ModelTraits>;
@@ -60,33 +61,38 @@ void transient(int argc, char** argv, bool evaluateBasePotentials)
     forwardModelList.add<TransportModel,GroundwaterModel>("soluteTransport",std::list<std::string>{"groundwaterFlow"});
   }
 
+  // set well & electrode configuration
   set_electrodes<ModelTraits>(&modelTraits);
   set_wells<ModelTraits>(&modelTraits);
   
-  //generate N geoelectrics models for N electrodes
+  // generate N geoelectrics models for N electrodes
   std::stringstream temp_ss;
   for (int i = 0; i < modelTraits.electrodeconfiguration.no_electrodes; i++)
   {
-    std::string name = "ERT_" + std::to_string(i); //name for the n-th model is geoelectricsn
+    std::string name = "ERT_" + std::to_string(i); // name for the n-th model is ERT_n
     if (!modelTraits.basePotentialEvaluation)
-      forwardModelList.add<GeoelectricsModel,TransportModel>(name,std::list<std::string>{"soluteTransport"}); //create a new geoelectrics model
+      forwardModelList.add<GeoelectricsModel,TransportModel>(name,std::list<std::string>{"soluteTransport"});
     else
-      forwardModelList.add<GeoelectricsModel>(name);
+      forwardModelList.add<GeoelectricsModel>(name); // if this is base potential evaluation -> concentration is irrelevant
   }
   
-  // print information about model list, avoid multiple outputs if run is parallel
+  // print information about model list
   if (helper.rank() == 0)
     forwardModelList.report(std::cout);
 
-  // define parameters (input) and measurements (output)
+  // define parameters (input) and measurements (output) + provide Matrix container for ERT simulations
   using ParameterList   = ModelTraits::ParameterList;
   using MeasurementList = ModelTraits::MeasurementList;
+  using ERTMatrixContainer = ModelTraits::ERTMatrixContainer;
+
   std::shared_ptr<ParameterList>   parameterList  (new ParameterList(config.template get<std::string>("fields.location")));
   std::shared_ptr<MeasurementList> measurementList(new MeasurementList(modelTraits));
+  std::shared_ptr<ERTMatrixContainer> ertMatrixContainer(new ERTMatrixContainer(modelTraits));
 
   // perform forward run
-  forwardModelList.solve(parameterList,measurementList);
+  forwardModelList.solve(parameterList,measurementList,ertMatrixContainer);
   
+  // if desired, output is unified from one file/processor to a single file
   if (helper.rank()== 0 && modelTraits.config().template get<bool>("output.unify_parallel_results",false))
   {
     if (modelTraits.config().template get<bool>("output.writeERT",false))
@@ -107,9 +113,9 @@ int main(int argc, char** argv)
   try
   {
     if (argc==1)
-      transient(argc,argv,false); // try to run the problem
+      transient(argc,argv,false); // run the problem, no base potential evaluation
     else if (std::string(argv[1]) == "--basepotential")
-      transient(argc,argv,true);
+      transient(argc,argv,true); // run the problem with base potential evaluation
     else
       std::cout << "Possible options: \n"
       << "      (no option) -> run transient model\n"

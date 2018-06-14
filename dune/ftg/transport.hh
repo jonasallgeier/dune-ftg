@@ -30,7 +30,7 @@ namespace Dune {
         const Traits& traits;
 
         std::shared_ptr<SolutionStorage<Traits,ModelTypes::Transport,Direction::Forward> > forwardStorage;
-        std::shared_ptr<SolutionStorage<Traits,ModelTypes::Transport,Direction::Adjoint> > adjointStorage;
+        //std::shared_ptr<SolutionStorage<Traits,ModelTypes::Transport,Direction::Adjoint> > adjointStorage;
 
         std::shared_ptr<ParameterField> porosityField;
 
@@ -61,12 +61,12 @@ namespace Dune {
         /**
          * @brief Set internal storage object for adjoint solution
          */
-        void setStorage(
+        /*void setStorage(
             const std::shared_ptr<SolutionStorage<Traits,ModelTypes::Transport,Direction::Adjoint> > storage
             )
         {
           adjointStorage = storage;
-        }
+        }*/
 
         /**
          * @brief Provide access to underlying parameter fields
@@ -80,9 +80,7 @@ namespace Dune {
          * @brief Provide access to measurement storage object
          */
         void setMeasurementList(const std::shared_ptr<const typename Traits::MeasurementList>& list)
-        {
-          //std::cout << "this is the setMeasurementList method of the transport model" << std::endl;
-        }
+        {}
 
         RF timestep() const
         {
@@ -144,7 +142,7 @@ namespace Dune {
               DUNE_THROW(Dune::Exception,"groundwater model parameters not set in transport model parameters");
             
             const auto& global = is.geometry().global(x);
-            return (*groundwaterParams).flux(is,x,t)/porosity(global); // !!! division by porosity !!!
+            return (*groundwaterParams).flux(is,x,t)/porosity(global); // division by porosity!
           }
 
         /**
@@ -172,12 +170,12 @@ namespace Dune {
         /**
          * @brief Adjoint source term based on measurements
          */
-        template<typename Element, typename Domain, typename Time>
+        /*template<typename Element, typename Domain, typename Time>
           RF adjointSource(const Element& elem, const Domain& x, const Time& t) const
           {
             // only needed for adjoint
             return 0.;
-          }
+          }*/
 
         /**
          * @brief Make ModelParameters of different model available
@@ -204,7 +202,7 @@ namespace Dune {
       };
 
     /**
-     * @brief Equation traits class for forward / adjoint solute transport equation
+     * @brief Equation traits class for forward solute transport equation
      */
     template<typename Traits, typename DirectionType>
       class EquationTraits<Traits, typename ModelTypes::Transport, DirectionType>
@@ -400,7 +398,7 @@ namespace Dune {
         const Boundary       <Traits,ModelTypes::Transport,DirectionType> boundary;
         const SourceTerm     <Traits,ModelTypes::Transport,DirectionType> sourceTerm;
 
-        RF adjointSign;
+        //RF adjointSign;
         RF time;
 
         mutable bool firstStage;
@@ -417,10 +415,10 @@ namespace Dune {
             )
           : traits(traits_), parameters(parameters_), boundary(traits,parameters.name()), sourceTerm(traits,parameters)
         {
-          if (DirectionType::isAdjoint())
+          /*if (DirectionType::isAdjoint())
             adjointSign = -1.;
           else
-            adjointSign = 1.;
+            adjointSign = 1.;*/
         }
 
         /**
@@ -656,7 +654,7 @@ namespace Dune {
                 const RF boundaryFlux = boundary.j(is,faceCenterLocal,time);
                 typename Traits::GridTraits::Scalar innerValue;
                 (*scalar).evaluate(is.inside(), cellCenterInside,innerValue);
-                const RF v = adjointSign * parameters.vNormal(is,faceCenterLocal,time);
+                const RF v = parameters.vNormal(is,faceCenterLocal,time);
                 const RF D_inside = parameters.diffusion(v);
                 // revert flux computation to obtain gradient on boundary
                 return - (boundaryFlux - v * innerValue[0]) / D_inside;
@@ -693,7 +691,7 @@ namespace Dune {
             //const Domain& cellCenterOutside = referenceElement(is.outside().geometry()).position(0,0);
 
             // advection velocity
-            const RF v = adjointSign * parameters.vNormal(is,faceCenterLocal,time);
+            const RF v = parameters.vNormal(is,faceCenterLocal,time);
 
             // upwinding
             const RF upwindValue = (v >= 0) ? innerValue : outerValue;
@@ -805,7 +803,7 @@ namespace Dune {
 
         private:
 
-        RF adjointSign;
+        //RF adjointSign;
 
         public:
 
@@ -817,10 +815,10 @@ namespace Dune {
             const ModelParameters<Traits,ModelTypes::Transport>& parameters
             ) 
         {
-          if (DirectionType::isAdjoint())
+          /*if (DirectionType::isAdjoint())
             adjointSign = -1.;
           else
-            adjointSign = 1.;
+            adjointSign = 1.;*/
         }
 
         /**
@@ -829,7 +827,7 @@ namespace Dune {
         template<typename EG, typename LFSU, typename X, typename LFSV, typename R>
           void alpha_volume (const EG& eg, const LFSU& lfsu, const X& x, const LFSV& lfsv, R& r) const
           {
-            r.accumulate(lfsv,0, adjointSign * x(lfsu,0) * eg.geometry().volume());
+            r.accumulate(lfsv,0, x(lfsu,0) * eg.geometry().volume());
           }
 
         RF suggestTimestep (RF dt) const

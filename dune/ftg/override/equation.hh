@@ -21,6 +21,7 @@ namespace Dune {
       {
         using ParameterList   = typename Traits::ParameterList;
         using MeasurementList = typename Traits::MeasurementList;
+        using ERTMatrixContainer = typename Traits::ERTMatrixContainer;
         //using Measurements    = typename MeasurementList::SubMeasurements;
 
         public:
@@ -32,7 +33,8 @@ namespace Dune {
             const std::shared_ptr<const ParameterList>& parameterList,
             //const std::shared_ptr<const MeasurementList>& measurementList,
             //const std::shared_ptr<Measurements>& measurements
-            const std::shared_ptr<MeasurementList>& measurements
+            const std::shared_ptr<MeasurementList>& measurements,
+            const std::shared_ptr<ERTMatrixContainer>& ertMatrixContainer
             ) = 0;
 
         /**
@@ -44,6 +46,9 @@ namespace Dune {
          * @brief Suggest a time step to take
          */
         virtual typename Traits::GridTraits::RangeField suggestTimestep() const = 0;
+
+
+        virtual void clearStorage() = 0;
 
         /**
          * @brief Return whether equation is solved
@@ -57,6 +62,7 @@ namespace Dune {
       {
         using ParameterList   = typename Traits::ParameterList;
         using MeasurementList = typename Traits::MeasurementList;
+        using ERTMatrixContainer = typename Traits::ERTMatrixContainer;
         //using Measurements    = typename MeasurementList::SubMeasurements;
 
         public:
@@ -68,7 +74,8 @@ namespace Dune {
             const std::shared_ptr<const ParameterList>& parameterList,
             //const std::shared_ptr<const MeasurementList>& measurementList,
             //const std::shared_ptr<Measurements>& measurements
-            const std::shared_ptr<MeasurementList>& measurements
+            const std::shared_ptr<MeasurementList>& measurements,
+            const std::shared_ptr<ERTMatrixContainer>& ertMatrixContainer
             ) = 0;
 
         /**
@@ -104,6 +111,7 @@ namespace Dune {
 
           using ParameterList   = typename Traits::ParameterList;
           using MeasurementList = typename Traits::MeasurementList;
+          using ERTMatrixContainer = typename Traits::ERTMatrixContainer;
           //using Measurements    = typename MeasurementList::SubMeasurements;
 
           using GFS        = typename EquationTraits<Traits,ModelType,DirectionType>::GridFunctionSpace;
@@ -140,7 +148,8 @@ namespace Dune {
           std::shared_ptr<Solver<Traits,ModelType,DirectionType> >          solver;
           std::shared_ptr<SolutionStorage<Traits,ModelType,DirectionType> > storage;
           //std::shared_ptr<Measurements>                                     measurements;
-          std::shared_ptr<MeasurementList>                                    measurements;
+          std::shared_ptr<MeasurementList>                                  measurements;
+          std::shared_ptr<ERTMatrixContainer>                               ertMatrixContainer;
           mutable Dune::Timer stepTimer, printTimer;
           
         public:
@@ -156,17 +165,9 @@ namespace Dune {
         {
           parameters.setStorage(storage);
 
-          // force initialization when used
-          if (DirectionType::isAdjoint())
-          {
-            time = -1.;
-            endTime = 0.;
-          }
-          else
-          {
-            time = 1.;
-            endTime = 0.;
-          }
+          
+          time = 1.;
+          endTime = 2.;
         }
 
           ~DifferentialEquation()
@@ -181,13 +182,15 @@ namespace Dune {
               const std::shared_ptr<const ParameterList>& parameterList,
               //const std::shared_ptr<const MeasurementList>& measurementList,
               //const std::shared_ptr<Measurements>& measurements_
-              const std::shared_ptr<MeasurementList>& measurements_
+              const std::shared_ptr<MeasurementList>& measurements_,
+              const std::shared_ptr<ERTMatrixContainer>& ertMatrixContainer_
               )
           {
             // set up parameter class
             parameters.setParameterList(parameterList);
             //parameters.setMeasurementList(measurementList);
             measurements = measurements_;
+            ertMatrixContainer = ertMatrixContainer_;
 
             // set up solution vectors
             oldSolution = GridVector(equationTraits.gfs(),0.);
@@ -225,7 +228,7 @@ namespace Dune {
 
             // set up solver object
             solver = std::make_shared<Solver<Traits,ModelType,DirectionType> >
-              (traits,equationTraits,cg,parameters,endTime);
+              (traits,equationTraits,cg,parameters,endTime,ertMatrixContainer);
 
             printTimers();
           }
@@ -269,15 +272,26 @@ namespace Dune {
             if (finished())
               DUNE_THROW(Dune::Exception,"equation cannot step when it has finished or wasn't initialized");
 
+            // get current time in human readable format to provide useful output
+            std::time_t rawtime;
+            std::time (&rawtime);
+            auto timechar = std::ctime (&rawtime);
+            timechar[std::strlen(timechar)-1] = '\0';
+    
+
+            if (traits.rank() == 0)
+              std::cout << "[" << timechar << "]: solve " << parameters.name() << " from: " << time << " to: " << time + timestep << std::endl;
+                
+            
             // perform time step
             stepTimer.start();
             (*measurements).setTimes(time,time+timestep);
             unsigned int subSteps = (*solver).step(time,timestep,oldSolution,newSolution);
             stepTimer.stop();
+            
+            if (traits.rank()==0)
+              std::cout << "[stepwidth: " << timestep << " substeps: " << subSteps << "]" << std::endl;
 
-            if (traits.rank() == 0)
-              std::cout << "from: " << time << " to: " << time + timestep
-                << " stepwidth: " << timestep << " substeps: " << subSteps << std::endl;
 
             // accept time step
             oldTime = time;
@@ -318,6 +332,11 @@ namespace Dune {
                     +timeString,parameters.name()+".forwardValue");
               printTimer.stop();
             }
+          }
+          
+          void clearStorage()
+          {
+            (*storage).clear();
           }
 
           /**

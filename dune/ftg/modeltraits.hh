@@ -7,6 +7,13 @@
 #include<dune/grid/yaspgrid.hh>
 // use slightly modified version of dune/randomfield.hh
 #include<dune/ftg/override/randomfield.hh>
+
+// the following includes are necessary for ERT matrix storage
+#include<dune/pdelab/common/referenceelements.hh>
+#include<dune/pdelab/finiteelementmap/p0fem.hh>
+#include<dune/pdelab/constraints/p0.hh>
+#include<dune/pdelab/backend/istl.hh>
+
 /**
  * @brief Helper class for grid generation
  */
@@ -30,8 +37,8 @@ class GridHelper
 
   GridHelper(const Dune::ParameterTree& config)
   {
-    isequidistant = config.get<bool>              ("grid.equidistant",1);
-    levels      = config.get<int>                 ("grid.levels"    ,1);
+    isequidistant = config.get<bool>("grid.equidistant",1);
+    levels      = config.get<int>("grid.levels",1);
     if (isequidistant)       
     {
       lowerleft   = config.get<std::vector<DF> >  ("grid.lowerleft");   // get coordinates of lower left point
@@ -52,11 +59,11 @@ class GridHelper
       {
         std::vector<DF> vec_i;
         if (i==0)
-          vec_i = config.get<std::vector<DF> >    ("grid.vector_x");
+          vec_i = config.get<std::vector<DF> >("grid.vector_x");
         else if (i==1)
-          vec_i = config.get<std::vector<DF> >    ("grid.vector_y");
+          vec_i = config.get<std::vector<DF> >("grid.vector_y");
         else if (i==2)
-          vec_i = config.get<std::vector<DF> >    ("grid.vector_z");
+          vec_i = config.get<std::vector<DF> >("grid.vector_z");
         else
           DUNE_THROW(Dune::Exception,"nonequidistant grid with more than four dimensions is not implemented");
         lowerleft.push_back(vec_i[0]);
@@ -66,7 +73,7 @@ class GridHelper
     }
   }
 
-  //lower left point of grid
+  // lower left point of grid
   Dune::FieldVector<DF,dim> LL() const
   {
     Dune::FieldVector<DF,dim> LLvector;
@@ -77,7 +84,7 @@ class GridHelper
     return LLvector;
   }
 
-  //upper right point of grid
+  // upper right point of grid
   Dune::FieldVector<DF,dim> UR() const
   {
     Dune::FieldVector<DF,dim> URvector;
@@ -88,6 +95,7 @@ class GridHelper
     return URvector;
   }
 
+  // array, containing vectors of all nodal coordinates
   std::array<std::vector<DF>,dim> coords() const
   {
     std::array<std::vector<DF>,dim> output;
@@ -144,7 +152,7 @@ class ModelTraits
     struct GridTraits
     {
       enum {dim = dimension};
-      using Grid     = Dune::YaspGrid<dim,Dune::TensorProductCoordinates<DF, dim> >;
+      using Grid     = Dune::YaspGrid<dim,Dune::TensorProductCoordinates<DF,dim>>;
       using GridView = typename Grid::LevelGridView;
       using RangeField   = RF;
       using Scalar       = Dune::FieldVector<RF,1>;
@@ -164,7 +172,7 @@ class ModelTraits
     const Dune::ParameterTree& duneConfig;
     const GridHelper<GridTraits> gh;
 
-    bool basePotentialEvaluation;  
+    bool basePotentialEvaluation;
 
     typename GridTraits::Grid yaspGrid;
 
@@ -216,7 +224,6 @@ class ModelTraits
       return electrode_cell_indices;
     }
 
-    // mechanism to define the vector of grid indices that contain electrodes
     void set_electrode_cell_indices(std::vector<unsigned int> cell_indices)
     {
       electrode_cell_indices = cell_indices;
@@ -237,9 +244,9 @@ class ModelTraits
     {
         int no_electrodes;          // number of electrodes
         std::vector<int> name_elec; // name vector
-        std::vector<RF> x_elec; // vector of x coordinates
-        std::vector<RF> y_elec; // vector of y coordinates
-        std::vector<RF> z_elec; // vector of z coordinates
+        std::vector<RF> x_elec;     // vector of x coordinates
+        std::vector<RF> y_elec;     // vector of y coordinates
+        std::vector<RF> z_elec;     // vector of z coordinates
         std::vector<int> surf_elec; // vector containing information if electrode is a surface electrode 
 
         // constructor -> reads in the data from file
@@ -251,16 +258,16 @@ class ModelTraits
             {std::cout << "Attempting to read electrode configuration file...";}          
           if (file_econf.is_open())
           {           
-            file_econf >> no_electrodes;  //first line equals number of electrodes
+            file_econf >> no_electrodes;  // first line equals number of electrodes
    
-            //declare temporary storage variables
+            // declare temporary storage variables
             int tmp_name;
             RF tmp_x;
             RF tmp_y;
             RF tmp_z;
             int tmp_surf;
         
-            //read data in lines {#,x,y,z,s} from file via temp to vector 
+            // read data in lines {#,x,y,z,s} from file via temp to vector 
             for (int i = 1; i < no_electrodes+1; i++) 
             {
               file_econf >> tmp_name;
@@ -275,7 +282,7 @@ class ModelTraits
               surf_elec.push_back(tmp_surf);
             }
             
-            //close the file and give console output
+            // close the file and give console output
             file_econf.close();
             if (myrank == 0)
               {std::cout << " done. Found " << z_elec.size() << " electrode(s)." << std::endl;}
@@ -287,18 +294,18 @@ class ModelTraits
         };
     };
     
-    //call constructor to read in electrode configuration from file specified in .ini; data is stored in a struct object
+    // call constructor to read in electrode configuration from file specified in .ini; data is stored in a struct object
     ElectrodeConfiguration electrodeconfiguration {duneConfig.get<std::string>("configfiles.electrodes"),rank()};
 
     // define well configuration; it is read in from a file by the constructor of this struct
     struct WellConfiguration
     {
         int no_wells;                     // number of wells
-        std::vector<RF> x_well;       // vector of x coordinates
-        std::vector<RF> y_well;       // vector of y coordinates
-        std::vector<RF> z1_well;      // vector of z1 coordinates
-        std::vector<RF> z2_well;      // vector of z2 coordinates
-        std::vector<RF> q_well;       // vector of pumping rates
+        std::vector<RF> x_well;           // vector of x coordinates
+        std::vector<RF> y_well;           // vector of y coordinates
+        std::vector<RF> z1_well;          // vector of z1 coordinates
+        std::vector<RF> z2_well;          // vector of z2 coordinates
+        std::vector<RF> q_well;           // vector of pumping rates
         std::vector<bool> injection_well; // vector of bools indicating whether this well participates the tracer injection 
 
         // constructor -> reads in the data from file
@@ -310,9 +317,9 @@ class ModelTraits
             {std::cout << "Attempting to read well configuration file...";}          
           if (file_wconf.is_open())
           {           
-            file_wconf >> no_wells;  //first line equals number of wells
+            file_wconf >> no_wells;  // first line equals number of wells
    
-            //declare temporary storage variables
+            // declare temporary storage variables
             RF tmp_x;
             RF tmp_y;
             RF tmp_z1;
@@ -320,7 +327,7 @@ class ModelTraits
             RF tmp_q;
             bool tmp_in;
         
-            //read data in lines {#,x,y,z,s} from file via temp to vector 
+            // read data in lines {#,x,y,z,s} from file via temp to vector 
             for (int i = 1; i < no_wells+1; i++) 
             {
               file_wconf >> tmp_x;
@@ -337,7 +344,7 @@ class ModelTraits
               injection_well.push_back(tmp_in);
             }
             
-            //close the file and give console output
+            // close the file and give console output
             file_wconf.close();
             if (myrank == 0)
               {std::cout << " done. Found " << q_well.size() << " well(s)." << std::endl;}
@@ -349,8 +356,32 @@ class ModelTraits
         };
     };
     
-    //call constructor to read in well configuration from file specified in .ini; data is stored in a struct object
+    // call constructor to read in well configuration from file specified in .ini; data is stored in a struct object
     WellConfiguration wellconfiguration {duneConfig.get<std::string>("configfiles.wells"),rank()};
+
+    // this class stores the ERT matrix during a single ERT measurement
+    class ERTMatrixContainer
+    {
+      private:
+        const ModelTraits& traits;
+        // this is bad! flexible code needed here! TODO
+        using M = Dune::PDELab::ISTL::BCRSMatrix<Dune::PDELab::GridFunctionSpace<Dune::GridView<Dune::DefaultLevelGridViewTraits<const Dune::YaspGrid<3, Dune::TensorProductCoordinates<double, 3> > > >, Dune::PDELab::P0LocalFiniteElementMap<double, double, 3>, Dune::PDELab::P0ParallelConstraints, Dune::PDELab::ISTL::VectorBackend<(Dune::PDELab::ISTL::Blocking)2, 1ul>, Dune::PDELab::LeafOrderingTag<Dune::PDELab::EmptyParams> >, Dune::PDELab::GridFunctionSpace<Dune::GridView<Dune::DefaultLevelGridViewTraits<const Dune::YaspGrid<3, Dune::TensorProductCoordinates<double, 3> > > >, Dune::PDELab::P0LocalFiniteElementMap<double, double, 3>, Dune::PDELab::P0ParallelConstraints, Dune::PDELab::ISTL::VectorBackend<(Dune::PDELab::ISTL::Blocking)2, 1ul>, Dune::PDELab::LeafOrderingTag<Dune::PDELab::EmptyParams> >, Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>, std::allocator<Dune::FieldMatrix<double, 1, 1> > >, Dune::PDELab::ISTL::PatternStatistics<long unsigned int> >;
+        M m;
+      public:
+      ERTMatrixContainer(const ModelTraits& traits_)
+        : traits(traits_)
+      {
+      }
+        void set_matrix(M m_in)
+        {
+          m = m_in;
+        }
+        M read_matrix()
+        {
+          return m;
+        }
+    };
+
 
     class MeasurementList
     {
@@ -385,7 +416,7 @@ class ModelTraits
 
           for (const auto & elem : elements (traits.grid().leafGridView()))
           {
-            //check if this cell is a measurement cell/is multiple measurement cells --> get electrode numbers of current cell
+            // check if this cell is a measurement cell/is multiple measurement cells --> get electrode numbers of current cell
             unsigned int cell_index = index_set().index(elem);
             std::vector<unsigned int> affected_electrodes; 
             
@@ -440,7 +471,7 @@ class ModelTraits
         void extract(const Storage& storage, const RF& firstTime, const RF& time,
             const std::string & modelname, const unsigned int& modelNumber,const std::string& timeString, Dune::Timer&  printTimer)              
         {
-          // determine which modeltype we have and if the output is desired; could probably be performed using templates
+          // determine which modeltype we have and if the output is desired; could probably be performed using templates (I don't know how)
           bool isERT              = (modelname.find("ERT_") == 0);
           bool isTransport        = (modelname.find("soluteTransport") == 0);
           bool isMomentsTransport = (modelname.find("momentsTransport_") == 0);
@@ -450,7 +481,7 @@ class ModelTraits
           {
             printTimer.start();
             
-            //declare output map for this source electrode; [1:144]
+            // declare output map for this source electrode; [1:144]
             std::map<unsigned int, RF> current_output;
             unsigned int no_electrodes = extraction_helper<Storage>(current_output,storage,time); // get the results of this model
 
@@ -525,7 +556,7 @@ class ModelTraits
           {
             printTimer.start();
 
-            //declare output map for this source electrode; [1:144]
+            // declare output map for this source electrode; [1:144]
             std::map<unsigned int, RF> current_output;
             unsigned int no_electrodes = extraction_helper<Storage>(current_output,storage,time); // get the results of this model
             
@@ -571,7 +602,7 @@ class ModelTraits
           {
             printTimer.start();
 
-            //declare output map for this source electrode; [1:144]
+            // declare output map for this source electrode; [1:144]
             std::map<unsigned int, RF> current_output;
             unsigned int no_electrodes = extraction_helper<Storage>(current_output,storage,time); // get the results of this model
             
@@ -617,7 +648,7 @@ class ModelTraits
           {
             printTimer.start();
             
-            //declare output map for this source electrode; [1:144]
+            // declare output map for this source electrode; [1:144]
             std::map<unsigned int, RF> current_output;
             unsigned int no_electrodes = extraction_helper<Storage>(current_output,storage,time); // get the results of this model
 

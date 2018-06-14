@@ -25,18 +25,17 @@ namespace Dune {
         using ParameterList   = typename Traits::ParameterList;
         using ParameterField  = typename ParameterList::SubRandomField;
         using MeasurementList = typename Traits::MeasurementList;
-        //using SubMeasurements = typename MeasurementList::SubMeasurements;
 
         const Traits& traits;
 
         std::shared_ptr<SolutionStorage<Traits,ModelTypes::Groundwater,Direction::Forward> > forwardStorage;
-        std::shared_ptr<SolutionStorage<Traits,ModelTypes::Groundwater,Direction::Adjoint> > adjointStorage;
+        //std::shared_ptr<SolutionStorage<Traits,ModelTypes::Groundwater,Direction::Adjoint> > adjointStorage;
 
         std::shared_ptr<ParameterField> conductivityField;
         std::shared_ptr<ParameterField> storativityField;
 
         public:
-          unsigned int model_number = 0;
+          unsigned int model_number = 0; // we need this, as the number is requested for ERT models
 
         ModelParameters(const Traits& traits_, const std::string& name)
           : ModelParametersBase<Traits>(name), traits(traits_)
@@ -60,12 +59,12 @@ namespace Dune {
         /**
          * @brief Set internal storage object for adjoint solution
          */
-        void setStorage(
+        /*void setStorage(
             const std::shared_ptr<SolutionStorage<Traits,ModelTypes::Groundwater,Direction::Adjoint> > storage
             )
         {
           adjointStorage = storage;
-        }
+        }*/
 
         /**
          * @brief Provide access to underlying parameter fields
@@ -117,7 +116,7 @@ namespace Dune {
             }
 
               unsigned int current_index = index_set().index(elem);
-              std::map<unsigned int,std::pair<RF,bool>> wellcells = well_cells(); //this step is necessary! direct usage of well_cells() leads to mismatch!
+              std::map<unsigned int,std::pair<RF,bool>> wellcells = well_cells(); // this step is necessary! direct usage of well_cells() leads to mismatch!
               typename std::map<unsigned int,std::pair<RF,bool>>::iterator temp = wellcells.find(current_index);
 
               if ( temp != wellcells.end() ) 
@@ -198,12 +197,12 @@ namespace Dune {
         /**
          * @brief Adjoint source term based on measurements
          */
-        template<typename Element, typename Domain, typename Time>
+        /*template<typename Element, typename Domain, typename Time>
           RF adjointSource(const Element& elem, const Domain& x, const Time& t) const
           {
             // only needed for adjoint
             return 0.;
-          }
+          }*/
 
         /**
          * @brief Make ModelParameters of different model available && make this model available for the others!
@@ -241,7 +240,7 @@ namespace Dune {
       };
 
     /**
-     * @brief Equation traits class for forward / adjoint groundwater flow equation
+     * @brief Equation traits class for forward groundwater flow equation
      */
     template<typename Traits, typename DirectionType>
       class EquationTraits<Traits, ModelTypes::Groundwater, DirectionType>
@@ -313,7 +312,7 @@ namespace Dune {
       };
 
     /**
-     * @brief Class representing initial condition for hydraulic head
+     * @brief Class representing guess condition for hydraulic head
      */
     template<typename Traits>
       class InitialValue<Traits, ModelTypes::Groundwater>
@@ -333,7 +332,7 @@ namespace Dune {
           template<typename Domain, typename Value>
             void evaluateGlobal(const Domain& x, Value& y) const
             {
-              // homogeneous initial/guess conditions
+              // homogeneous guess conditions
               y = 0.;
             }
       };
@@ -361,8 +360,6 @@ namespace Dune {
           template<typename Element, typename Domain, typename Time>
             auto q (const Element& elem, const Domain& x, const Time& t) const
             {
-              // initialize water pumping rate
-              
               unsigned int current_index = parameters.index_set().index(elem);
               auto temp = well_cells.find(current_index);
 
@@ -377,7 +374,7 @@ namespace Dune {
     /**
      * @brief Source term of adjoint groundwater flow equation
      */
-    template<typename Traits>
+    /*template<typename Traits>
       class SourceTerm<Traits, ModelTypes::Groundwater, Direction::Adjoint>
       {
         const ModelParameters<Traits,ModelTypes::Groundwater>& parameters;
@@ -394,7 +391,7 @@ namespace Dune {
             // adjoint source depends on parameters / measurements
             return parameters.adjointSource(elem,x,t);
           }
-      };
+      };*/
 
     /**
      * @brief Define groundwater equation as a differential equation
@@ -439,7 +436,8 @@ namespace Dune {
         enum {doAlphaSkeleton  = true};
         enum {doAlphaBoundary  = true};
         enum {doLambdaVolume   = true};
-        enum {doLambdaSkeleton = DirectionType::isAdjoint()};
+        //enum {doLambdaSkeleton = DirectionType::isAdjoint()};
+        enum {doLambdaSkeleton = false};
         enum {doLambdaBoundary = true};
 
         private:
@@ -510,7 +508,7 @@ namespace Dune {
             const Domain& cellCenterLocal = referenceElement(eg.geometry()).position(0,0);
             r.accumulate(lfsv,0, - sourceTerm.q(eg.entity(),cellCenterLocal,time));
 
-            if (DirectionType::isAdjoint())
+            /*if (DirectionType::isAdjoint())
             {
               RF q = 0.;
 
@@ -528,7 +526,7 @@ namespace Dune {
               }
 
               r.accumulate(lfsv,0, -q);
-            }
+            }*/
           }
 
         /**

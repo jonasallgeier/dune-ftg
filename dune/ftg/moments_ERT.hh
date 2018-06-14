@@ -30,7 +30,7 @@ namespace Dune {
         const Traits& traits;
 
         std::shared_ptr<SolutionStorage<Traits,ModelTypes::Moments_ERT,Direction::Forward> > forwardStorage;
-        std::shared_ptr<SolutionStorage<Traits,ModelTypes::Moments_ERT,Direction::Adjoint> > adjointStorage;
+        //std::shared_ptr<SolutionStorage<Traits,ModelTypes::Moments_ERT,Direction::Adjoint> > adjointStorage;
 
         std::shared_ptr<ParameterField> sigma_bgField;
         std::shared_ptr<ParameterField> kappaField;
@@ -197,7 +197,7 @@ namespace Dune {
       };
 
     /**
-     * @brief Equation traits class for forward / adjoint solute transport equation
+     * @brief Equation traits class for forward moments ERT
      */
     template<typename Traits, typename DirectionType>
       class EquationTraits<Traits, typename ModelTypes::Moments_ERT, DirectionType>

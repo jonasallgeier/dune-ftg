@@ -16,7 +16,7 @@ namespace Dune {
   namespace Modelling {
 
     /**
-     * @brief Parameter class for the solute transport equation
+     * @brief Parameter class for the moments transport
      */
     template<typename Traits>
       class ModelParameters<Traits, typename ModelTypes::Moments_c>
@@ -30,7 +30,7 @@ namespace Dune {
         const Traits& traits;
 
         std::shared_ptr<SolutionStorage<Traits,ModelTypes::Moments_c,Direction::Forward> > forwardStorage;
-        std::shared_ptr<SolutionStorage<Traits,ModelTypes::Moments_c,Direction::Adjoint> > adjointStorage;
+        //std::shared_ptr<SolutionStorage<Traits,ModelTypes::Moments_c,Direction::Adjoint> > adjointStorage;
 
         std::shared_ptr<ParameterField> porosityField;
 
@@ -69,12 +69,12 @@ namespace Dune {
         /**
          * @brief Set internal storage object for adjoint solution
          */
-        void setStorage(
+        /*void setStorage(
             const std::shared_ptr<SolutionStorage<Traits,ModelTypes::Moments_c,Direction::Adjoint> > storage
             )
         {
           adjointStorage = storage;
-        }
+        }*/
 
         /**
          * @brief Provide access to underlying parameter fields
@@ -88,9 +88,7 @@ namespace Dune {
          * @brief Provide access to measurement storage object
          */
         void setMeasurementList(const std::shared_ptr<const typename Traits::MeasurementList>& list)
-        {
-          //std::cout << "this is the setMeasurementList method of the transport model" << std::endl;
-        }
+        {}
 
         RF timestep() const
         {
@@ -225,7 +223,7 @@ namespace Dune {
       };
 
     /**
-     * @brief Equation traits class for forward / adjoint solute transport equation
+     * @brief Equation traits class for forward solute transport equation
      */
     template<typename Traits, typename DirectionType>
       class EquationTraits<Traits, typename ModelTypes::Moments_c, DirectionType>
@@ -428,7 +426,7 @@ namespace Dune {
         typename Traits::GridTraits::Grid::LeafGridView  lgv;
         std::map<unsigned int, std::pair<RF, bool>> well_cells;
 
-        RF adjointSign;
+        // RF adjointSign;
         RF time;
         RF kth;
 
@@ -446,10 +444,10 @@ namespace Dune {
             )
           : traits(traits_), parameters(parameters_), boundary(traits,parameters.name()), sourceTerm(traits,parameters), lgv(traits_.grid().leafGridView()) 
         {
-          if (DirectionType::isAdjoint())
+          /*if (DirectionType::isAdjoint())
             adjointSign = -1.;
           else
-            adjointSign = 1.;
+            adjointSign = 1.;*/
           well_cells = parameters.well_cells();
           kth = parameters.model_number;
         }
@@ -696,7 +694,7 @@ namespace Dune {
                 const RF boundaryFlux = boundary.j(is,faceCenterLocal,time);
                 typename Traits::GridTraits::Scalar innerValue;
                 (*scalar).evaluate(is.inside(), cellCenterInside,innerValue);
-                const RF v = adjointSign * parameters.vNormal(is,faceCenterLocal,time);
+                const RF v = parameters.vNormal(is,faceCenterLocal,time);
                 const RF D_inside = parameters.diffusion(v);
                 // revert flux computation to obtain gradient on boundary
                 return - (boundaryFlux - v * innerValue[0]) / D_inside;
@@ -733,7 +731,7 @@ namespace Dune {
             //const Domain& cellCenterOutside = referenceElement(is.outside().geometry()).position(0,0);
 
             // advection velocity
-            const RF v = adjointSign * parameters.vNormal(is,faceCenterLocal,time);
+            const RF v = parameters.vNormal(is,faceCenterLocal,time);
 
             // upwinding
             const RF upwindValue = (v >= 0) ? innerValue : outerValue;
@@ -845,7 +843,7 @@ namespace Dune {
 
         private:
 
-        RF adjointSign;
+        //RF adjointSign;
 
         public:
 
@@ -857,10 +855,10 @@ namespace Dune {
             const ModelParameters<Traits,ModelTypes::Moments_c>& parameters
             ) 
         {
-          if (DirectionType::isAdjoint())
+          /*if (DirectionType::isAdjoint())
             adjointSign = -1.;
           else
-            adjointSign = 1.;
+            adjointSign = 1.;*/
         }
 
         /**

@@ -339,20 +339,29 @@ if handles.switches.doPotentialsMoments
     m0 = diff(handles.data3d_el_moments(A,[M N],1)-handles.data3d_el_moments(B,[M N],1));
     m1 = diff(handles.data3d_el_moments(A,[M N],2)-handles.data3d_el_moments(B,[M N],2));
     handles.current_arrivaltime=m1/m0;
+    handles.current_arrivaltime = hours(handles.current_arrivaltime/3600);
 end
+
+potential_timeseries = reshape(handles.current_ts,[1,size(handles.current_ts,3)]);
+
+m0_numeric = trapz(handles.times,potential_timeseries-handles.current_base);
+m1_numeric = trapz(handles.times,(potential_timeseries-handles.current_base).*handles.times');
+handles.current_arrivaltime_numeric = hours(m1_numeric/m0_numeric/3600);
+
+
 %timevector = datetime(datevec(seconds(handles.times)));
 timevector = hours(handles.times/3600);
 hold off
-plot(timevector,reshape(handles.current_ts,[1,size(handles.current_ts,3)]),'kx-');%,'LineWidth',2);
+plot(timevector,potential_timeseries,'kx-');%,'LineWidth',2);
+hold on
+plot([handles.current_arrivaltime_numeric,handles.current_arrivaltime_numeric],[min(potential_timeseries) max(potential_timeseries)],'k--','LineWidth',1.5);
+
+
 if handles.switches.doPotentialsBase
-    hold on
-    plot([timevector(1),timevector(end)],[handles.current_base handles.current_base],'k--');%,'LineWidth',2);
+    plot([timevector(1),timevector(end)],[handles.current_base handles.current_base],'k:');%,'LineWidth',2);
 end
 if handles.switches.doPotentialsMoments
-    hold on
-    handles.current_arrivaltime=m1/m0;
-    handles.current_arrivaltime = hours(handles.current_arrivaltime/3600);
-    plot([handles.current_arrivaltime,handles.current_arrivaltime],[min(handles.current_ts) max(handles.current_ts)],'r-');
+    plot([handles.current_arrivaltime,handles.current_arrivaltime],[min(handles.current_ts) max(handles.current_ts)],'r:','LineWidth',1.5);
 end
 
 %xlim([0 handles.times]);
