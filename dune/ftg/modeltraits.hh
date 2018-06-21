@@ -7,12 +7,31 @@
 #include<dune/grid/yaspgrid.hh>
 // use slightly modified version of dune/randomfield.hh
 #include<dune/ftg/override/randomfield.hh>
+#include<dune/ftg/override/equation.hh>
+#include<dune/modelling/declarations.hh>
 
 // the following includes are necessary for ERT matrix storage
 #include<dune/pdelab/common/referenceelements.hh>
 #include<dune/pdelab/finiteelementmap/p0fem.hh>
 #include<dune/pdelab/constraints/p0.hh>
 #include<dune/pdelab/backend/istl.hh>
+
+#include<dune/pdelab/finiteelement/localbasiscache.hh>
+#include<dune/pdelab/gridoperator/onestep.hh>
+#include<dune/pdelab/stationary/linearproblem.hh>
+
+
+/**
+ * @brief Tags for existing model types
+ */
+struct ModelTypes
+{
+  struct Groundwater {};
+  struct Transport {};
+  struct Geoelectrics {};
+  struct Moments_c {};
+  struct Moments_ERT {};
+};
 
 /**
  * @brief Helper class for grid generation
@@ -365,8 +384,23 @@ class ModelTraits
       private:
         const ModelTraits& traits;
         // this is bad! flexible code needed here! TODO
-        using M = Dune::PDELab::ISTL::BCRSMatrix<Dune::PDELab::GridFunctionSpace<Dune::GridView<Dune::DefaultLevelGridViewTraits<const Dune::YaspGrid<3, Dune::TensorProductCoordinates<double, 3> > > >, Dune::PDELab::P0LocalFiniteElementMap<double, double, 3>, Dune::PDELab::P0ParallelConstraints, Dune::PDELab::ISTL::VectorBackend<(Dune::PDELab::ISTL::Blocking)2, 1ul>, Dune::PDELab::LeafOrderingTag<Dune::PDELab::EmptyParams> >, Dune::PDELab::GridFunctionSpace<Dune::GridView<Dune::DefaultLevelGridViewTraits<const Dune::YaspGrid<3, Dune::TensorProductCoordinates<double, 3> > > >, Dune::PDELab::P0LocalFiniteElementMap<double, double, 3>, Dune::PDELab::P0ParallelConstraints, Dune::PDELab::ISTL::VectorBackend<(Dune::PDELab::ISTL::Blocking)2, 1ul>, Dune::PDELab::LeafOrderingTag<Dune::PDELab::EmptyParams> >, Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>, std::allocator<Dune::FieldMatrix<double, 1, 1> > >, Dune::PDELab::ISTL::PatternStatistics<long unsigned int> >;
+
+        using DiscType   = typename Dune::Modelling::EquationTraits<ModelTraits,ModelTypes::Geoelectrics>::DiscretizationType;
+        using GFS        = typename Dune::Modelling::EquationTraits<ModelTraits,ModelTypes::Geoelectrics>::GridFunctionSpace;
+        using GridVector = typename Dune::Modelling::EquationTraits<ModelTraits,ModelTypes::Geoelectrics>::GridVector;
+        using C          = typename GFS::template ConstraintsContainer<RF>::Type;
+
+        using LOP = Dune::Modelling::SpatialOperator<ModelTraits,ModelTypes::Geoelectrics,DiscType>;
+
+        using MBE = Dune::PDELab::istl::BCRSMatrixBackend<>;
+        using GO  = Dune::PDELab::GridOperator<GFS,GFS,LOP,MBE,DF,RF,RF,C,C>;
+        using M   = typename GO::template MatrixContainer<RF>::Type;
+        using LS    = Dune::PDELab::ISTLBackend_CG_AMG_SSOR<GO>;
+        //using M = Dune::PDELab::ISTL::BCRSMatrix<Dune::PDELab::GridFunctionSpace<Dune::GridView<Dune::DefaultLevelGridViewTraits<const Dune::YaspGrid<3, Dune::TensorProductCoordinates<double, 3> > > >, Dune::PDELab::P0LocalFiniteElementMap<double, double, 3>, Dune::PDELab::P0ParallelConstraints, Dune::PDELab::ISTL::VectorBackend<(Dune::PDELab::ISTL::Blocking)2, 1ul>, Dune::PDELab::LeafOrderingTag<Dune::PDELab::EmptyParams> >, Dune::PDELab::GridFunctionSpace<Dune::GridView<Dune::DefaultLevelGridViewTraits<const Dune::YaspGrid<3, Dune::TensorProductCoordinates<double, 3> > > >, Dune::PDELab::P0LocalFiniteElementMap<double, double, 3>, Dune::PDELab::P0ParallelConstraints, Dune::PDELab::ISTL::VectorBackend<(Dune::PDELab::ISTL::Blocking)2, 1ul>, Dune::PDELab::LeafOrderingTag<Dune::PDELab::EmptyParams> >, Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>, std::allocator<Dune::FieldMatrix<double, 1, 1> > >, Dune::PDELab::ISTL::PatternStatistics<long unsigned int> >;
         M m;
+
+        std::shared_ptr<LS> ls;
+
       public:
       ERTMatrixContainer(const ModelTraits& traits_)
         : traits(traits_)
@@ -379,6 +413,14 @@ class ModelTraits
         M read_matrix()
         {
           return m;
+        }
+        void set_ls(std::shared_ptr<LS> ls_in)
+        {
+          ls = ls_in;
+        }
+        std::shared_ptr<LS> read_ls()
+        {
+          return ls;
         }
     };
 
@@ -732,17 +774,7 @@ class ModelTraits
     };
 };
 
-/**
- * @brief Tags for existing model types
- */
-struct ModelTypes
-{
-  struct Groundwater {};
-  struct Transport {};
-  struct Geoelectrics {};
-  struct Moments_c {};
-  struct Moments_ERT {};
-};
+
 
 
 #endif // DUNE_FTG_MODELTRAITS_TRANSIENT_HH

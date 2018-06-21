@@ -6,6 +6,7 @@
 #include<dune/pdelab/finiteelement/localbasiscache.hh>
 #include<dune/pdelab/gridoperator/onestep.hh>
 #include<dune/pdelab/stationary/linearproblem.hh>
+#include<dune/pdelab/instationary/onestepparameter.hh>
 
 #include<dune/modelling/declarations.hh>
 
@@ -53,8 +54,9 @@ namespace Dune {
           P0FEM p0fem;
           P0GFS p0gfs;
           P0C   p0cg;
-          LS    ls;
+          //LS    ls;
 
+          std::shared_ptr<LS> ls_ptr;
           using ERTMatrixContainer = typename Traits::ERTMatrixContainer;
           std::shared_ptr<ERTMatrixContainer> ertMatrixContainer;
 
@@ -77,9 +79,16 @@ namespace Dune {
             go(equationTraits.gfs(),cg,equationTraits.gfs(),cg,lop,mbe), m(go),
             p0fem(Dune::GeometryType(Dune::GeometryType::cube,Traits::GridTraits::dim)),
             p0gfs(equationTraits.gfs().gridView(),p0fem),
-            ls(equationTraits.gfs(),5000,1,false,true), // max_iter, verbose, reuse, superLU
             ertMatrixContainer(ertMatrixContainer_)
-        {}
+        {
+          if (parameters.model_number==0)
+          {
+            //ls(equationTraits.gfs(),5000,1,false,true); // max_iter, verbose, reuse, superLU
+            
+            std::shared_ptr<LS> ls_ptr(new LS(equationTraits.gfs(),5000,1,true,true));
+            (*ertMatrixContainer).set_ls(ls_ptr);
+          }
+        }
 
           /**
            * @brief Compute solution (since problem is stationary)
@@ -100,7 +109,7 @@ namespace Dune {
               m = (*ertMatrixContainer).read_matrix();
             }
             GridVector z(equationTraits.gfs(),0.);
-            ls.apply(m,z,residual,1e-10);
+            (*(*ertMatrixContainer).read_ls()).apply(m,z,residual,1e-6);   // check if pointer is valid!
             solution -= z;
 
             return 1;
@@ -354,8 +363,115 @@ namespace Dune {
               RF Tend,
               std::shared_ptr<typename Traits::ERTMatrixContainer>& ertMatrixContainer_)
             : config(traits.config()), equationTraits(equationTraits_), parameters(parameters_),
-            minStep(config.get<RF>("time.minStep")),
+            minStep(config.get<RF>("time.step_transport")),
             smallStep(0.),
+            lop(traits,parameters), tlop(traits,parameters), mbe(9),
+            go0(equationTraits.gfs(),cg,equationTraits.gfs(),cg,lop,mbe),
+            go1(equationTraits.gfs(),cg,equationTraits.gfs(),cg,tlop,mbe), igo(go0,go1),
+            p0fem(Dune::GeometryType(Dune::GeometryType::cube,Traits::GridTraits::dim)),
+            p0gfs(equationTraits.gfs().gridView(),p0fem),
+            //ls(igo,cg,p0gfs,p0cg,config.sub("amg")), solver(igo,ls,1e-6),
+            ls(equationTraits.gfs()), solver(igo,ls,1e-6),
+            osm(method,igo,solver),
+            ertMatrixContainer(ertMatrixContainer_)
+        {
+          osm.setVerbosityLevel(config.get<int>("solver.verbosity",3));
+        }
+
+          /**
+           * @brief Compute a time step
+           */
+          unsigned int step(RF timeFrom, RF timestep, GridVector& oldSolution, GridVector& newSolution)
+          {
+            osm.apply(timeFrom,timestep,oldSolution,newSolution);
+            return 1;
+          }
+
+      };
+
+   /**
+     * @brief Solver for linear PDEs using implicit timestepping scheme
+     */
+    template<typename Traits, typename ModelType, typename DirectionType>
+      class CrankNicolsonSolver
+      {
+        private:
+
+          using GridTraits = typename Traits::GridTraits;
+
+          using GV     = typename GridTraits::GridView;
+          using RF     = typename GridTraits::RangeField;
+          using Scalar = typename GridTraits::Scalar;
+          using DF     = typename GridTraits::DomainField;
+          using Domain = typename GridTraits::Domain;
+
+          using DiscType   = typename EquationTraits<Traits,ModelType,DirectionType>::DiscretizationType;
+          using GFS        = typename EquationTraits<Traits,ModelType,DirectionType>::GridFunctionSpace;
+          using GridVector = typename EquationTraits<Traits,ModelType,DirectionType>::GridVector;
+          using C          = typename GFS::template ConstraintsContainer<RF>::Type;
+
+          using LOP  = SpatialOperator <Traits,ModelType,DiscType,DirectionType>;
+          using TLOP = TemporalOperator<Traits,ModelType,DiscType,DirectionType>;
+
+          using Method = Dune::PDELab::OneStepThetaParameter<RF>;
+
+          using MBE = Dune::PDELab::istl::BCRSMatrixBackend<>;
+          using GO0 = Dune::PDELab::GridOperator<GFS,GFS, LOP,MBE,DF,RF,RF,C,C>;
+          using GO1 = Dune::PDELab::GridOperator<GFS,GFS,TLOP,MBE,DF,RF,RF,C,C>;
+          using IGO = Dune::PDELab::OneStepGridOperator<GO0,GO1>;
+
+          using P0FEM = Dune::PDELab::P0LocalFiniteElementMap<DF,RF,Traits::GridTraits::dim>;
+          using P0VBE = Dune::PDELab::istl::VectorBackend<Dune::PDELab::istl::Blocking::fixed,1>;
+          using P0CON = Dune::PDELab::P0ParallelConstraints;
+          using P0GFS = Dune::PDELab::GridFunctionSpace<typename Traits::GridTraits::GridView,P0FEM,P0CON,P0VBE>;
+          using P0C   = typename P0GFS::template ConstraintsContainer<RF>::Type;
+          using LS    = Dune::PDELab::ISTLBackend_CG_AMG_SSOR<IGO>;
+
+          using PDESolver = Dune::PDELab::StationaryLinearProblemSolver<IGO,LS,GridVector>;
+          using OSM       = Dune::PDELab::OneStepMethod<RF,IGO,PDESolver,GridVector,GridVector>;
+
+          const Dune::ParameterTree&                            config;
+          const EquationTraits<Traits,ModelType,DirectionType>& equationTraits;
+          ModelParameters<Traits,ModelType>&                    parameters;
+
+          const RF minStep;
+          RF smallStep;
+
+          const Method method;
+          LOP lop;
+          TLOP tlop;
+          //const Dune::PDELab::OneStepThetaParameter<RF> eulerMethod(0.5);
+
+          MBE       mbe;
+          GO0       go0;
+          GO1       go1;
+          IGO       igo;
+
+          P0FEM     p0fem;
+          P0GFS     p0gfs;
+          P0C       p0cg;
+          LS        ls;
+          PDESolver solver;
+          OSM       osm;
+
+          using ERTMatrixContainer = typename Traits::ERTMatrixContainer;
+          std::shared_ptr<ERTMatrixContainer> ertMatrixContainer;
+        public:
+
+          /**
+           * @brief Constructor
+           */
+          CrankNicolsonSolver(
+              const Traits& traits,
+              const EquationTraits<Traits,ModelType,DirectionType>& equationTraits_,
+              const C& cg,
+              ModelParameters<Traits,ModelType>& parameters_,
+              RF Tend,
+              std::shared_ptr<typename Traits::ERTMatrixContainer>& ertMatrixContainer_)
+            : config(traits.config()), equationTraits(equationTraits_), parameters(parameters_),
+            minStep(config.get<RF>("time.step_transport")),
+            smallStep(0.),
+            method(0.5),
             lop(traits,parameters), tlop(traits,parameters), mbe(9),
             go0(equationTraits.gfs(),cg,equationTraits.gfs(),cg,lop,mbe),
             go1(equationTraits.gfs(),cg,equationTraits.gfs(),cg,tlop,mbe), igo(go0,go1),

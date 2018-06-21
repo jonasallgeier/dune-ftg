@@ -22,6 +22,7 @@ namespace Dune {
       : public ModelParametersBase<Traits>
       {
         using RF = typename Traits::GridTraits::RangeField;
+        using DF = typename Traits::GridTraits::DomainField;
         using ParameterList   = typename Traits::ParameterList;
         using ParameterField  = typename ParameterList::SubRandomField;
         using MeasurementList = typename Traits::MeasurementList;
@@ -36,6 +37,7 @@ namespace Dune {
 
         public:
           unsigned int model_number = 0; // we need this, as the number is requested for ERT models
+          //RF dt_CFL;
 
         ModelParameters(const Traits& traits_, const std::string& name)
           : ModelParametersBase<Traits>(name), traits(traits_)
@@ -115,23 +117,23 @@ namespace Dune {
               DUNE_THROW(Dune::Exception,"conductivity field not set in groundwater model parameters");
             }
 
-              unsigned int current_index = index_set().index(elem);
-              std::map<unsigned int,std::pair<RF,bool>> wellcells = well_cells(); // this step is necessary! direct usage of well_cells() leads to mismatch!
-              typename std::map<unsigned int,std::pair<RF,bool>>::iterator temp = wellcells.find(current_index);
+            unsigned int current_index = index_set().index(elem);
+            std::map<unsigned int,std::pair<RF,bool>> wellcells = well_cells(); // this step is necessary! direct usage of well_cells() leads to mismatch!
+            typename std::map<unsigned int,std::pair<RF,bool>>::iterator temp = wellcells.find(current_index);
 
-              if ( temp != wellcells.end() ) 
-              {
-                // a well cell -> return very high conductivity to achieve "shortcut" or very low conductivity to achieve "packer"
-                typename Traits::GridTraits::Scalar value;
-                value = 1.0;
-                if ( (temp->second).first == 0.0)
-                  value = 0;
-                return value[0];
-              }
-              // no well cell
+            if ( temp != wellcells.end() ) 
+            {
+              // a well cell -> return very high conductivity to achieve "shortcut" or very low conductivity to achieve "packer"
               typename Traits::GridTraits::Scalar value;
-              (*conductivityField).evaluate(elem,x,value);
+              value = 1.0;
+              if ( (temp->second).first == 0.0)
+                value = 0;
               return value[0];
+            }
+            // no well cell
+            typename Traits::GridTraits::Scalar value;
+            (*conductivityField).evaluate(elem,x,value);
+            return value[0];
           }
 
         /**
@@ -193,6 +195,43 @@ namespace Dune {
 
             return output;
           }
+
+          template<typename Element, typename Time>
+          RF dt_CFL(const Element& elem, const Time& time) const
+          {
+            RF output = 0.;
+            typename Traits::GridTraits::Vector localFlux;
+
+            Dune::GeometryType type = elem.geometry().type();
+            const auto& rule = Dune::QuadratureRules
+              <typename Traits::GridTraits::DomainField, Traits::GridTraits::dim>::rule(type, 1);
+
+            std::vector<DF> dx;
+            dx.push_back(elem.geometry().corner(1)[0]-elem.geometry().corner(0)[0]); // delta_x
+            dx.push_back(elem.geometry().corner(2)[1]-elem.geometry().corner(0)[1]); // delta_y
+            dx.push_back(elem.geometry().corner(4)[2]-elem.geometry().corner(0)[2]); // delta_z
+
+            // loop over quadrature points 
+            for(const auto& point : rule) 
+            {
+              const auto& x = point.position();
+              (*forwardStorage).flux(time,elem,x,localFlux);
+              RF norm = 0.;
+              for (unsigned int i=0; i<localFlux.size(); i++)
+              {
+                norm += std::abs(localFlux[i])/dx[i];
+              }
+              //for (const auto& entry : localFlux)
+              //  norm += entry*entry;
+              norm = 1/norm;
+
+              output = std::max(output,norm);
+            }
+
+            return output;
+          }
+
+
 
         /**
          * @brief Adjoint source term based on measurements

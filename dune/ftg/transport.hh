@@ -129,6 +129,8 @@ namespace Dune {
           {
             typename Traits::GridTraits::Scalar localConcentration;
             (*forwardStorage).value(time,elem,x,localConcentration);
+            //if (localConcentration[0] < 0)
+            //  std::cout << "Concentration below 0! value: " << localConcentration << " | position: " << elem.geometry().center()[0] << "|" << elem.geometry().center()[1] << "|" << elem.geometry().center()[2] << std::endl; 
             return localConcentration[0];
           }
 
@@ -165,6 +167,15 @@ namespace Dune {
               DUNE_THROW(Dune::Exception,"groundwater model parameters not set in transport model parameters");
             
             return (*groundwaterParams).maxFluxNorm(elem,time)/porosity(elem.geometry().center());
+          }
+
+        template<typename Element, typename Time>
+          RF dt_CFL(const Element& elem, const Time& time) const
+          {
+            if (!groundwaterParams)
+              DUNE_THROW(Dune::Exception,"groundwater model parameters not set in transport model parameters");
+            
+            return (*groundwaterParams).dt_CFL(elem,time)*porosity(elem.geometry().center());
           }
 
         /**
@@ -232,10 +243,14 @@ namespace Dune {
             using StationarySolver = StationaryLinearSolver_BCGS_AMG_ILU0<T...>;
           template<typename... T>
             using TransientSolver  = ExplicitLinearSolver<T...>;
+            //using TransientSolver  = ImplicitLinearSolver<T...>;
+            //using TransientSolver  = CrankNicolsonSolver<T...>;
 
           // use explicit Euler for timestepping
           // alternative: Heun
           using OneStepScheme = Dune::PDELab::ExplicitEulerParameter<RangeField>;
+          //using OneStepScheme = Dune::PDELab::ImplicitEulerParameter<RangeField>;
+          //using OneStepScheme = Dune::PDELab::OneStepThetaParameter<RangeField>;
 
           // use RT0 flux reconstruction
           // alternatives: BDM1 and RT1
@@ -343,7 +358,7 @@ namespace Dune {
                   return (temp->second).first*c_in; // rate multiplied with concentration
                 }
               }
-              // if we end up here, this cell is neither source nor sink
+              // if we end up here, this cell is neither a concentration source nor sink
               return 0.0;
             }
       };
@@ -366,6 +381,8 @@ namespace Dune {
             Discretization::CellCenteredFiniteVolume, DirectionType>
       : public Dune::PDELab::NumericalJacobianSkeleton<SpatialOperator
       <Traits, ModelTypes::Transport, Discretization::CellCenteredFiniteVolume, DirectionType> >,
+      public Dune::PDELab::NumericalJacobianVolume
+      <TemporalOperator<Traits, ModelTypes::Transport, Discretization::CellCenteredFiniteVolume, DirectionType> >,
       public Dune::PDELab::NumericalJacobianBoundary
         <SpatialOperator<Traits, ModelTypes::Transport, Discretization::CellCenteredFiniteVolume, DirectionType> >,
       public Dune::PDELab::FullSkeletonPattern, 
@@ -389,6 +406,8 @@ namespace Dune {
         enum {doAlphaVolume   = true};
         enum {doAlphaSkeleton = true};
         enum {doAlphaBoundary = true};
+        enum {doLambdaSkeleton = false};
+        enum {doLambdaBoundary = false};
 
         private:
 
@@ -401,8 +420,9 @@ namespace Dune {
         //RF adjointSign;
         RF time;
 
-        mutable bool firstStage;
-        mutable RF   dtmin;
+        mutable bool firstStage = true;
+        mutable RF dtmin;
+        mutable RF dt_min_CFL;
 
         public:
 
@@ -458,7 +478,13 @@ namespace Dune {
               
               const RF maxVelocity = std::max(insideMaxVelocity,outsideMaxVelocity);
 
+              RF inside_dt_CFL = parameters.dt_CFL(ig.inside(),time);
+              RF outside_dt_CFL = parameters.dt_CFL(ig.outside(),time);
+
+              RF dt_CFL = std::min(inside_dt_CFL,outside_dt_CFL);
+              
               // update minimum of admissable timesteps
+              dt_min_CFL = std::min(dt_min_CFL,dt_CFL);
               dtmin = std::min(dtmin,distance/maxVelocity);
             }
 
@@ -489,9 +515,10 @@ namespace Dune {
 
               // compute maximum local velocity |v|
               const RF maxVelocity = parameters.maxVelocity(ig.inside(),time);
-              
+              RF dt_CFL = parameters.dt_CFL(ig.inside(),time);
               // update minimum of admissable timesteps
               dtmin = std::min(dtmin,distance/maxVelocity);
+              dt_min_CFL = std::min(dt_min_CFL,dt_CFL);
             }
             
             const IDomain& faceCenterLocal = referenceElement(ig.geometry()).position(0,0);
@@ -534,8 +561,9 @@ namespace Dune {
         {
           if (r == 1)
           {
-            firstStage = true;
+            //firstStage = true; <- not needed here, as groundwater flow is stationary; one evaluation sufficient
             dtmin = std::numeric_limits<RF>::max();
+            dt_min_CFL = std::numeric_limits<RF>::max();
           }
           else
             firstStage = false;
@@ -671,10 +699,13 @@ namespace Dune {
          */
         RF suggestTimestep(RF dt) const
         {
-          if (dt*dtmin > 0.)
-            return   traits.comm().max(dtmin);
-          else
-            return - traits.comm().max(dtmin);
+            //std::cout << "Suggested time step: " << traits.comm().min(dt_min_CFL) << "s" << std::endl;
+            if (firstStage)
+            {
+              std::cout << "CFL-based time step suggestion: " << traits.comm().min(dtmin) << "s" << std::endl;
+              firstStage = false;
+            }
+            return traits.comm().min(dt_min_CFL);
         }
 
         private:
