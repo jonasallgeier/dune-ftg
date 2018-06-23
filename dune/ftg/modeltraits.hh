@@ -395,32 +395,62 @@ class ModelTraits
         using MBE = Dune::PDELab::istl::BCRSMatrixBackend<>;
         using GO  = Dune::PDELab::GridOperator<GFS,GFS,LOP,MBE,DF,RF,RF,C,C>;
         using M   = typename GO::template MatrixContainer<RF>::Type;
-        using LS    = Dune::PDELab::ISTLBackend_CG_AMG_SSOR<GO>;
-        //using M = Dune::PDELab::ISTL::BCRSMatrix<Dune::PDELab::GridFunctionSpace<Dune::GridView<Dune::DefaultLevelGridViewTraits<const Dune::YaspGrid<3, Dune::TensorProductCoordinates<double, 3> > > >, Dune::PDELab::P0LocalFiniteElementMap<double, double, 3>, Dune::PDELab::P0ParallelConstraints, Dune::PDELab::ISTL::VectorBackend<(Dune::PDELab::ISTL::Blocking)2, 1ul>, Dune::PDELab::LeafOrderingTag<Dune::PDELab::EmptyParams> >, Dune::PDELab::GridFunctionSpace<Dune::GridView<Dune::DefaultLevelGridViewTraits<const Dune::YaspGrid<3, Dune::TensorProductCoordinates<double, 3> > > >, Dune::PDELab::P0LocalFiniteElementMap<double, double, 3>, Dune::PDELab::P0ParallelConstraints, Dune::PDELab::ISTL::VectorBackend<(Dune::PDELab::ISTL::Blocking)2, 1ul>, Dune::PDELab::LeafOrderingTag<Dune::PDELab::EmptyParams> >, Dune::BCRSMatrix<Dune::FieldMatrix<double, 1, 1>, std::allocator<Dune::FieldMatrix<double, 1, 1> > >, Dune::PDELab::ISTL::PatternStatistics<long unsigned int> >;
-        M m;
+        using LS_ERT     = Dune::PDELab::ISTLBackend_CG_AMG_SSOR<GO>;
 
-        std::shared_ptr<LS> ls;
+
+        using DiscType_moments   = typename Dune::Modelling::EquationTraits<ModelTraits,ModelTypes::Moments_ERT>::DiscretizationType;
+        using GFS_moments        = typename Dune::Modelling::EquationTraits<ModelTraits,ModelTypes::Moments_ERT>::GridFunctionSpace;
+        using GridVector_moments = typename Dune::Modelling::EquationTraits<ModelTraits,ModelTypes::Moments_ERT>::GridVector;
+        using C_moments          = typename GFS::template ConstraintsContainer<RF>::Type;
+
+        using LOP_moments = Dune::Modelling::SpatialOperator<ModelTraits,ModelTypes::Moments_ERT,DiscType_moments>;
+
+        using MBE_moments = Dune::PDELab::istl::BCRSMatrixBackend<>;
+        using GO_moments  = Dune::PDELab::GridOperator<GFS_moments,GFS_moments,LOP_moments,MBE_moments,DF,RF,RF,C_moments,C_moments>;
+        using LS_moments = Dune::PDELab::ISTLBackend_BCGS_AMG_ILU0<GO_moments>;
+        
+        M m_ERT;
+        M m_moments;
+
+        std::shared_ptr<LS_ERT> ls_ERT;
+        std::shared_ptr<LS_moments> ls_moments;
 
       public:
       ERTMatrixContainer(const ModelTraits& traits_)
         : traits(traits_)
       {
       }
-        void set_matrix(M m_in)
+        void set_matrix_ERT(M m_in)
         {
-          m = m_in;
+          m_ERT = m_in;
         }
-        M read_matrix()
+        M read_matrix_ERT()
         {
-          return m;
+          return m_ERT;
         }
-        void set_ls(std::shared_ptr<LS> ls_in)
+        void set_ls_ERT(std::shared_ptr<LS_ERT> ls_in)
         {
-          ls = ls_in;
+          ls_ERT = ls_in;
         }
-        std::shared_ptr<LS> read_ls()
+        std::shared_ptr<LS_ERT> read_ls_ERT()
         {
-          return ls;
+          return ls_ERT;
+        }
+        void set_matrix_moments(M m_in)
+        {
+          m_moments = m_in;
+        }
+        M read_matrix_moments()
+        {
+          return m_moments;
+        }
+        void set_ls_moments(std::shared_ptr<LS_moments> ls_in)
+        {
+          ls_moments = ls_in;
+        }
+        std::shared_ptr<LS_moments> read_ls_moments()
+        {
+          return ls_moments;
         }
     };
 
@@ -636,7 +666,31 @@ class ModelTraits
               outfile << electrode.first << " " << electrode.second << std::endl;
             }
             outfile.close();
-          
+
+
+            // print complete concentration field to ASCII file
+            if (traits.config().template get<bool>("output.writeVTK_transport_at_ERT_times",false))
+            {
+              std::map<std::pair<RF, RF>, std::map<RF, RF> > output_concentrations_field; // <x,y> <z,value> 
+              const typename GridTraits::Domain x = {0.5, 0.5, 0.5}; // get value at cell center
+
+              std::ofstream outfile;
+
+              std::string filename = filenamebase + "_field_" + timeString + "_" + std::to_string(traits.rank()) + ".data";
+
+              outfile.open(filename, std::ios::out | std::ios::trunc);
+              outfile << "x y z c" << std::endl;
+
+              for (const auto & elem : elements (traits.grid().leafGridView()))
+              {
+                typename GridTraits::Scalar output = 0.0;  
+                (*storage).value(time,elem,x,output);
+
+                outfile << elem.geometry().global(x)[0] << " " << elem.geometry().global(x)[1] << " ";
+                outfile << elem.geometry().global(x)[2] << " " << output << std::endl;
+              }
+              outfile.close();
+            }
             printTimer.stop();
           }
 

@@ -3,17 +3,18 @@ close all
 home
 
 cm.number_of_processors = 2;
+field_resolution = 'intermediate';
 
 % directory information
 cm.outputfolder = ' ./'; % space in front is necessary!
-cm.outputtrunk = 'output/production'; % all field files have this trunk in front of their name; it is not recommended to leave this empty
+cm.outputtrunk = 'output/intermediate'; % all field files have this trunk in front of their name; it is not recommended to leave this empty
 cm.input = './input'; % all field files have this trunk in front of their name; it is not recommended to leave this empty
 
 cm.fieldgenerator_location = '../../../../../release-build/dune-randomfield/src/fieldgenerator';
 cm.vtk_out = true;
 
 cm.isequidistant = false;
-cm.seed = 6; % this is a matlab rng seed, which will later deliver different pseudo random reproducible seeds for dune-randomfield
+cm.seed = 42; % this is a matlab rng seed, which will later deliver different pseudo random reproducible seeds for dune-randomfield
 rng(cm.seed);
 
 % definition of general properties of grid
@@ -26,15 +27,20 @@ if cm.isequidistant
     cm.vector_y = linspace(0,cm.extents(2),cm.cells(2)+1);
     cm.vector_z = linspace(0,cm.extents(3),cm.cells(3)+1);
 else
-    cm.vector_x = [0 4 8 12 16 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 84 88 92 96 100]-50;
-    cm.vector_y = [0 4 8 12 16 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 54 58 62 66 70]-35;
-    cm.vector_z = [0 10 12 14 16 18 20]-20;
-    %cm.vector_x=[-50 -45 -40 -37.5 -35 -32.5 [-30:-20] [-19.5:0.5:-8] [-7.75:0.25:-4] [-3.9:.1:3.9] [4:.25:7.75] [8:0.5:19.5] [20:30] 32.5 35 37.5 40 45 50];
-    %cm.vector_y=[-35 -31 -27 -24 -22 [-20:-10] [-9.5:.5:-5] [-4.75:0.25:-0.5] [-.4:.1:.4] [0.5:0.25:4.75] [5:.5:9.5] [10:20] 22 24 27 31 35]; 
-    %cm.vector_z=[-20 -15 -12.5 -11.5 -10.7 -10.3 [-10:.1:-2] [-1.8:.2:0]]; 
-    %cm.vector_x = [0:10:50 52:3:61 70:10:100];
-    %cm.vector_y = [0:10:30 32:7:42 50:10:70];
-    %cm.vector_z = [0 10 18 20];
+     switch field_resolution
+        case 'intermediate'
+            cm.vector_x = [-50:4:-34 -32 -30:-12 -11.5:.5:11.5 12:30 32 34:4:50];
+            cm.vector_y = [-35:4:-19 -17 -15:-4 -3:.5:3 4:15 17 19:4:35];
+            cm.vector_z = [-20:2:-12 -11:1:0];
+        case 'production'
+            cm.vector_x=[-50 -45 -40 -37.5 -35 -32.5 [-30:-20] [-19.5:0.5:-8] [-7.75:0.25:-4] [-3.9:.1:3.9] [4:.25:7.75] [8:0.5:19.5] [20:30] 32.5 35 37.5 40 45 50];
+            cm.vector_y=[-35 -31 -27 -24 -22 [-20:-10] [-9.5:.5:-5] [-4.75:0.25:-0.5] [-.4:.1:.4] [0.5:0.25:4.75] [5:.5:9.5] [10:20] 22 24 27 31 35]; 
+            cm.vector_z=[-20 -15 -12.5 -11.5 -10.7 -10.3 [-10:.1:-2] [-1.8:.2:0]];
+        case 'cirpka'
+            cm.vector_x=[-50 -45 -40 -37.5 -35 -32.5 [-30:-20] [-19.5:0.5:-8] [-7.7:0.3:-5] [-14:15]/3 [5.3:.3:8] [8.5:.5:15] [16:25] [27.5:2.5:40] 45 50];
+            cm.vector_y=[-35 -30 -25 -22.5 [-20:-10] [-9.5:.5:-5] [-14:-1]/3 [-.2:.1:.2] [1:15]/3 [5.5:.5:10] [11:20] 22.5 25 30 35];
+            cm.vector_z=[ -20 -15 -13 -11.5 -10.7 -10.3 -10.1 [-10:.1:-2] [-1.8:.2:0]];
+     end
     cm.extents = [range(cm.vector_x), range(cm.vector_y), range(cm.vector_z)];
     cm.cells = [length(cm.vector_x)-1, length(cm.vector_y)-1, length(cm.vector_z)-1];
 end

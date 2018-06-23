@@ -14,16 +14,12 @@
 #include<dune/ftg/override/boundary.hh>
 #include<dune/ftg/override/equation.hh>
 #include<dune/ftg/override/forwardmodel.hh>
-
-//#include<dune/modelling/forwardmodel.hh>
-//#include<dune/modelling/forwardadjointmodel.hh>
-
 #include<dune/ftg/modeltraits.hh>
 #include<dune/ftg/groundwater.hh>
 #include<dune/ftg/transport.hh>
 #include<dune/ftg/geoelectrics.hh>
+#include<dune/ftg/moments_ERT.hh> // is needed, because it is used in modelTraits
 #include<dune/ftg/ftg.hh>
-//#include<dune/pdelab/function/callableadapter.hh>
 
 using namespace Dune::Modelling;
 

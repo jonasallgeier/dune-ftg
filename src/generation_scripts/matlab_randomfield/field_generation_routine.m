@@ -204,23 +204,18 @@ for i = 1:subfields.number
                     temp_2(temp_2>1) = 1;
                     temp_2(temp_2<0) = 0;
                     weights_z = temp_1.*temp_2;
-                    %weights_z = weights_z();
-                    
-                    %weights_z = reshape(weights_z,[1,1,length(z_cell_midpoints)]);
-                    %weights_z = repmat(weights_z,[size(data,1),size(data,2),1]);
-                    
-                    %weights = weights_x.*weights_y.*weights_z;
-                    %weights = weights(:,:,find(z_fine(2:end)>z_layermin,1):end);
-                    
-                    %selection = data(weights>0);
-                    %weights = weights(weights>0);
-                    
-                    %X_vec = reshape(selection,[1,size(selection,1)*size(selection,2)*size(selection,3)]);
-                    %weights_vec = reshape(weights,[1,size(weights,1)*size(weights,2)*size(weights,3)]);
-                    %average = sum(weights_vec.*X_vec)./sum(weights_vec);
-                    
-                    %temp_matrix(i_y,i_z) = selection'*weights/sum(sum(sum(weights)));
-                    temp_matrix(i_y,i_z) = mean(mean(mean(data(weights_x>0,weights_y>0,weights_z>0))));
+
+                    selection = data(weights_x>0,weights_y>0,weights_z>0);
+                     weights_x_ = weights_x(weights_x>0);
+                     weights_y_ = weights_y(weights_y>0);
+                     weights_z_ = weights_z(weights_z>0);
+                     
+                     weights = reshape(weights_x_,[length(weights_x_),1,1]);
+                     weights = weights.*reshape(weights_y_,[1,length(weights_y_),1]);
+                     weights = weights.*reshape(weights_z_,[1,1,length(weights_z_)]);
+                     selection = selection.*weights;
+                     temp_matrix(i_y,i_z) = sum(sum(sum(selection)))/sum(sum(sum(weights)));
+                     %temp_matrix(i_y,i_z) = mean(mean(mean(selection)));
                 end
             end
             field_data(i_x,:,z_loop_vector) = temp_matrix(:,z_loop_vector);

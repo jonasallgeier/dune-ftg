@@ -30,10 +30,7 @@ namespace Dune {
         const Traits& traits;
 
         std::shared_ptr<SolutionStorage<Traits,ModelTypes::Transport,Direction::Forward> > forwardStorage;
-        //std::shared_ptr<SolutionStorage<Traits,ModelTypes::Transport,Direction::Adjoint> > adjointStorage;
-
         std::shared_ptr<ParameterField> porosityField;
-
         std::shared_ptr<const ModelParameters<Traits,ModelTypes::Groundwater> > groundwaterParams;
 
         public:
@@ -57,16 +54,6 @@ namespace Dune {
         {
           forwardStorage = storage;
         }
-
-        /**
-         * @brief Set internal storage object for adjoint solution
-         */
-        /*void setStorage(
-            const std::shared_ptr<SolutionStorage<Traits,ModelTypes::Transport,Direction::Adjoint> > storage
-            )
-        {
-          adjointStorage = storage;
-        }*/
 
         /**
          * @brief Provide access to underlying parameter fields
@@ -129,8 +116,6 @@ namespace Dune {
           {
             typename Traits::GridTraits::Scalar localConcentration;
             (*forwardStorage).value(time,elem,x,localConcentration);
-            //if (localConcentration[0] < 0)
-            //  std::cout << "Concentration below 0! value: " << localConcentration << " | position: " << elem.geometry().center()[0] << "|" << elem.geometry().center()[1] << "|" << elem.geometry().center()[2] << std::endl; 
             return localConcentration[0];
           }
 
@@ -179,16 +164,6 @@ namespace Dune {
           }
 
         /**
-         * @brief Adjoint source term based on measurements
-         */
-        /*template<typename Element, typename Domain, typename Time>
-          RF adjointSource(const Element& elem, const Domain& x, const Time& t) const
-          {
-            // only needed for adjoint
-            return 0.;
-          }*/
-
-        /**
          * @brief Make ModelParameters of different model available
          */
         void registerModel(
@@ -203,8 +178,7 @@ namespace Dune {
             const std::string& name,
             const std::shared_ptr<ModelParameters<Traits,ModelTypes::Geoelectrics> >& otherParams
             )
-        {
-        }
+        {}
 
         std::map<unsigned int, std::pair<RF, bool>> well_cells() const
         {
@@ -236,34 +210,19 @@ namespace Dune {
           using GridVector        = typename Dune::PDELab::Backend::Vector<GridFunctionSpace,RangeField>;
 
           using DiscretizationType = Discretization::CellCenteredFiniteVolume;
-
-          // use linear solver in stationary case,
-          // explicit linear solver for transient case
           template<typename... T>
             using StationarySolver = StationaryLinearSolver_BCGS_AMG_ILU0<T...>;
           template<typename... T>
-            using TransientSolver  = ExplicitLinearSolver<T...>;
+            //using TransientSolver  = ExplicitLinearSolver<T...>;
             //using TransientSolver  = ImplicitLinearSolver<T...>;
-            //using TransientSolver  = CrankNicolsonSolver<T...>;
-
-          // use explicit Euler for timestepping
-          // alternative: Heun
-          using OneStepScheme = Dune::PDELab::ExplicitEulerParameter<RangeField>;
+            using TransientSolver  = CrankNicolsonSolver<T...>;
+          //using OneStepScheme = Dune::PDELab::ExplicitEulerParameter<RangeField>;
           //using OneStepScheme = Dune::PDELab::ImplicitEulerParameter<RangeField>;
-          //using OneStepScheme = Dune::PDELab::OneStepThetaParameter<RangeField>;
-
-          // use RT0 flux reconstruction
-          // alternatives: BDM1 and RT1
+          using OneStepScheme = Dune::PDELab::OneStepThetaParameter<RangeField>;
           template<typename... T>
             using FluxReconstruction = RT0Reconstruction<T...>;
-
-          // store complete space-time solution
-          // alternative: only store last two steps
           template<typename... T>
             using StorageContainer = LastTwoContainer<T...>;
-
-          // use previous timestep when interpolating stored solution
-          // alternatives: NextTimestep and LinearInterpolation
           template<typename... T>
             using TemporalInterpolation = PreviousTimestep<T...>;
 
@@ -417,7 +376,6 @@ namespace Dune {
         const Boundary       <Traits,ModelTypes::Transport,DirectionType> boundary;
         const SourceTerm     <Traits,ModelTypes::Transport,DirectionType> sourceTerm;
 
-        //RF adjointSign;
         RF time;
 
         mutable bool firstStage = true;
@@ -434,12 +392,7 @@ namespace Dune {
             const ModelParameters<Traits,ModelTypes::Transport>& parameters_
             )
           : traits(traits_), parameters(parameters_), boundary(traits,parameters.name()), sourceTerm(traits,parameters)
-        {
-          /*if (DirectionType::isAdjoint())
-            adjointSign = -1.;
-          else
-            adjointSign = 1.;*/
-        }
+        {}
 
         /**
          * @brief Volume integral depending on test and ansatz functions
@@ -699,7 +652,7 @@ namespace Dune {
          */
         RF suggestTimestep(RF dt) const
         {
-            //std::cout << "Suggested time step: " << traits.comm().min(dt_min_CFL) << "s" << std::endl;
+            //std::cout << "Suggested time step: " << traits.comm().min(dt_min_CFL) << "s" << std::endl; // <- the other CFL implementation works better
             if (firstStage)
             {
               std::cout << "CFL-based time step suggestion: " << traits.comm().min(dtmin) << "s" << std::endl;
@@ -718,8 +671,6 @@ namespace Dune {
           {
             // geometry information
             const IDomain& faceCenterLocal  = referenceElement(is.geometry()).position(0,0);
-            //const Domain& cellCenterInside  = referenceElement(is.inside() .geometry()).position(0,0);
-            //const Domain& cellCenterOutside = referenceElement(is.outside().geometry()).position(0,0);
 
             // advection velocity
             const RF v = parameters.vNormal(is,faceCenterLocal,time);
@@ -834,8 +785,6 @@ namespace Dune {
 
         private:
 
-        //RF adjointSign;
-
         public:
 
         /**
@@ -845,12 +794,7 @@ namespace Dune {
             const Traits& traits,
             const ModelParameters<Traits,ModelTypes::Transport>& parameters
             ) 
-        {
-          /*if (DirectionType::isAdjoint())
-            adjointSign = -1.;
-          else
-            adjointSign = 1.;*/
-        }
+        {}
 
         /**
          * @brief Volume integral depending on test and ansatz functions

@@ -30,15 +30,13 @@ namespace Dune {
         const Traits& traits;
 
         std::shared_ptr<SolutionStorage<Traits,ModelTypes::Moments_c,Direction::Forward> > forwardStorage;
-        //std::shared_ptr<SolutionStorage<Traits,ModelTypes::Moments_c,Direction::Adjoint> > adjointStorage;
-
         std::shared_ptr<ParameterField> porosityField;
-
         std::shared_ptr<const ModelParameters<Traits,ModelTypes::Groundwater> > groundwaterParams;
         std::shared_ptr<const ModelParameters<Traits,ModelTypes::Moments_c> > momentParams;
 
         public:
           unsigned int model_number = 0;
+          using RF_public = typename Traits::GridTraits::RangeField;
 
         ModelParameters(const Traits& traits_, const std::string& name)
           : ModelParametersBase<Traits>(name), traits(traits_)
@@ -65,16 +63,6 @@ namespace Dune {
         {
           forwardStorage = storage;
         }
-
-        /**
-         * @brief Set internal storage object for adjoint solution
-         */
-        /*void setStorage(
-            const std::shared_ptr<SolutionStorage<Traits,ModelTypes::Moments_c,Direction::Adjoint> > storage
-            )
-        {
-          adjointStorage = storage;
-        }*/
 
         /**
          * @brief Provide access to underlying parameter fields
@@ -153,6 +141,14 @@ namespace Dune {
             return (*groundwaterParams).flux(is,x,t)/porosity(global); // !!! division by porosity !!!
           }
 
+        template<typename Element, typename Domain>
+          RF potential (const Element& elem, const Domain& x) const
+          {
+            if (!groundwaterParams)
+              DUNE_THROW(Dune::Exception,"groundwater model parameters not set in transport model parameters");
+            return (*groundwaterParams).head(elem,x); // !!! division by porosity !!!
+          }
+
         /**
          * @brief Constant for diffusive flux contribution
          */
@@ -208,8 +204,7 @@ namespace Dune {
             const std::string& name, 
             const std::shared_ptr<ModelParameters<Traits,ModelTypes::Moments_ERT> >& otherParams
             )
-        {
-        }
+        {}
 
         auto& index_set() const
         {
@@ -246,30 +241,16 @@ namespace Dune {
           using GridVector        = typename Dune::PDELab::Backend::Vector<GridFunctionSpace,RangeField>;
 
           using DiscretizationType = Discretization::CellCenteredFiniteVolume;
-
-          // use linear solver in stationary case,
-          // explicit linear solver for transient case
           template<typename... T>
             using StationarySolver = StationaryLinearSolver_BCGS_AMG_ILU0<T...>;
+            //using StationarySolver = Solver_Reordered_Grid<T...>;          
           template<typename... T>
             using TransientSolver  = ExplicitLinearSolver<T...>;
-
-          // use explicit Euler for timestepping
-          // alternative: Heun
-          using OneStepScheme = Dune::PDELab::ExplicitEulerParameter<RangeField>;
-
-          // use RT0 flux reconstruction
-          // alternatives: BDM1 and RT1
+          using OneStepScheme = Dune::PDELab::ImplicitEulerParameter<RangeField>;
           template<typename... T>
             using FluxReconstruction = RT0Reconstruction<T...>;
-
-          // store complete space-time solution
-          // alternative: only store last two steps
           template<typename... T>
             using StorageContainer = LastTwoContainer<T...>;
-
-          // use previous timestep when interpolating stored solution
-          // alternatives: NextTimestep and LinearInterpolation
           template<typename... T>
             using TemporalInterpolation = PreviousTimestep<T...>;
 
@@ -426,7 +407,6 @@ namespace Dune {
         typename Traits::GridTraits::Grid::LeafGridView  lgv;
         std::map<unsigned int, std::pair<RF, bool>> well_cells;
 
-        // RF adjointSign;
         RF time;
         RF kth;
 
@@ -444,10 +424,6 @@ namespace Dune {
             )
           : traits(traits_), parameters(parameters_), boundary(traits,parameters.name()), sourceTerm(traits,parameters), lgv(traits_.grid().leafGridView()) 
         {
-          /*if (DirectionType::isAdjoint())
-            adjointSign = -1.;
-          else
-            adjointSign = 1.;*/
           well_cells = parameters.well_cells();
           kth = parameters.model_number;
         }
@@ -560,7 +536,7 @@ namespace Dune {
               return;
             }
 
-            // Outflow boundary condition
+            // Outflow boundary condition (this will never be reached?)
 
             // advection velocity
             const RF v = parameters.vNormal(ig.intersection(),faceCenterLocal,time);
@@ -727,8 +703,6 @@ namespace Dune {
           {
             // geometry information
             const IDomain& faceCenterLocal  = referenceElement(is.geometry()).position(0,0);
-            //const Domain& cellCenterInside  = referenceElement(is.inside() .geometry()).position(0,0);
-            //const Domain& cellCenterOutside = referenceElement(is.outside().geometry()).position(0,0);
 
             // advection velocity
             const RF v = parameters.vNormal(is,faceCenterLocal,time);
@@ -843,8 +817,6 @@ namespace Dune {
 
         private:
 
-        //RF adjointSign;
-
         public:
 
         /**
@@ -854,20 +826,14 @@ namespace Dune {
             const Traits& traits,
             const ModelParameters<Traits,ModelTypes::Moments_c>& parameters
             ) 
-        {
-          /*if (DirectionType::isAdjoint())
-            adjointSign = -1.;
-          else
-            adjointSign = 1.;*/
-        }
+        {}
 
         /**
          * @brief Volume integral depending on test and ansatz functions
          */
         template<typename EG, typename LFSU, typename X, typename LFSV, typename R>
           void alpha_volume (const EG& eg, const LFSU& lfsu, const X& x, const LFSV& lfsv, R& r) const
-          {
-          }
+          {}
 
         RF suggestTimestep (RF dt) const
         {

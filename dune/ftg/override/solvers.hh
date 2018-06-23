@@ -9,6 +9,7 @@
 #include<dune/pdelab/instationary/onestepparameter.hh>
 
 #include<dune/modelling/declarations.hh>
+#include<dune/ftg/reorderedgridview.hh>
 
 namespace Dune {
   namespace Modelling {
@@ -83,10 +84,8 @@ namespace Dune {
         {
           if (parameters.model_number==0)
           {
-            //ls(equationTraits.gfs(),5000,1,false,true); // max_iter, verbose, reuse, superLU
-            
-            std::shared_ptr<LS> ls_ptr(new LS(equationTraits.gfs(),5000,1,true,true));
-            (*ertMatrixContainer).set_ls(ls_ptr);
+            std::shared_ptr<LS> ls_ptr(new LS(equationTraits.gfs(),5000,1,true,true)); // max_iter, verbose, reuse, superLU
+            (*ertMatrixContainer).set_ls_ERT(ls_ptr);
           }
         }
 
@@ -104,12 +103,12 @@ namespace Dune {
             {
               m = 0.;
               go.jacobian(solution,m);
-              (*ertMatrixContainer).set_matrix(m);
+              (*ertMatrixContainer).set_matrix_ERT(m);
             } else {
-              m = (*ertMatrixContainer).read_matrix();
+              m = (*ertMatrixContainer).read_matrix_ERT();
             }
             GridVector z(equationTraits.gfs(),0.);
-            (*(*ertMatrixContainer).read_ls()).apply(m,z,residual,1e-6);   // check if pointer is valid!
+            (*(*ertMatrixContainer).read_ls_ERT()).apply(m,z,residual,1e-6);   // check if pointer is valid!
             solution -= z;
 
             return 1;
@@ -199,6 +198,105 @@ namespace Dune {
             return 1;
           }
       };
+
+    /**
+     * @brief Solver for stationary linear PDEs
+     */
+    template<typename Traits, typename ModelType, typename DirectionType>
+      class StationaryLinearSolver_BCGS_AMG_ILU0_reuse_matrix
+      {
+        private:
+
+          using RF = typename Traits::GridTraits::RangeField;
+          using DF = typename Traits::GridTraits::DomainField;
+
+          using DiscType   = typename EquationTraits<Traits,ModelType,DirectionType>::DiscretizationType;
+          using GFS        = typename EquationTraits<Traits,ModelType,DirectionType>::GridFunctionSpace;
+          using GridVector = typename EquationTraits<Traits,ModelType,DirectionType>::GridVector;
+          using C          = typename GFS::template ConstraintsContainer<RF>::Type;
+
+          using LOP = SpatialOperator<Traits,ModelType,DiscType,DirectionType>;
+
+          using MBE = Dune::PDELab::istl::BCRSMatrixBackend<>;
+          using GO  = Dune::PDELab::GridOperator<GFS,GFS,LOP,MBE,DF,RF,RF,C,C>;
+          using M   = typename GO::template MatrixContainer<RF>::Type;
+
+          using P0FEM = Dune::PDELab::P0LocalFiniteElementMap<DF,RF,Traits::GridTraits::dim>;
+          using P0VBE = Dune::PDELab::istl::VectorBackend<Dune::PDELab::istl::Blocking::fixed,1>;
+          using P0CON = Dune::PDELab::P0ParallelConstraints;
+          using P0GFS = Dune::PDELab::GridFunctionSpace<typename Traits::GridTraits::GridView,P0FEM,P0CON,P0VBE>;
+          using P0C   = typename P0GFS::template ConstraintsContainer<RF>::Type;
+          using LS    = Dune::PDELab::ISTLBackend_BCGS_AMG_ILU0<GO>; // ISTLBackend_BCGS_AMG_ILU0/ISTLBackend_CG_AMG_SSOR
+
+          const EquationTraits<Traits,ModelType,DirectionType>& equationTraits;
+
+          const ModelParameters<Traits,ModelType>&  parameters;
+          LOP   lop;
+
+          MBE   mbe;
+          GO    go;
+          M     m;
+
+          P0FEM p0fem;
+          P0GFS p0gfs;
+          P0C   p0cg;
+          //LS    ls;
+
+          std::shared_ptr<LS> ls_ptr;
+          using ERTMatrixContainer = typename Traits::ERTMatrixContainer;
+          std::shared_ptr<ERTMatrixContainer> ertMatrixContainer;
+
+        public:
+
+          /**
+           * @brief Constructor
+           */
+          StationaryLinearSolver_BCGS_AMG_ILU0_reuse_matrix(
+              const Traits& traits,
+              const EquationTraits<Traits,ModelType,DirectionType>& equationTraits_,
+              const C& cg,
+              const ModelParameters<Traits,ModelType>& parameters_,
+              RF Tend,
+              std::shared_ptr<typename Traits::ERTMatrixContainer>& ertMatrixContainer_)
+            : equationTraits(equationTraits_), parameters(parameters_), lop(traits,parameters_), mbe(9),
+            go(equationTraits.gfs(),cg,equationTraits.gfs(),cg,lop,mbe), m(go),
+            p0fem(Dune::GeometryType(Dune::GeometryType::cube,Traits::GridTraits::dim)),
+            p0gfs(equationTraits.gfs().gridView(),p0fem),
+            ertMatrixContainer(ertMatrixContainer_)
+        {
+          if (parameters.model_number==0 && parameters.k==0)
+          {
+            std::shared_ptr<LS> ls_ptr(new LS(equationTraits.gfs(),5000,1,true,true)); // max_iter, verbose, reuse, superLU
+            (*ertMatrixContainer).set_ls_moments(ls_ptr);
+          }
+        }
+
+          /**
+           * @brief Compute solution (since problem is stationary)
+           */
+          unsigned int step(RF time, RF timestep, GridVector& oldSolution, GridVector& solution)
+          {
+            GridVector residual(equationTraits.gfs(),0.);
+            lop.setTime(time+timestep);
+
+            go.residual(solution, residual);
+            
+            if (parameters.model_number==0 && parameters.k==0)
+            {
+              m = 0.;
+              go.jacobian(solution,m);
+              (*ertMatrixContainer).set_matrix_moments(m);
+            } else {
+              m = (*ertMatrixContainer).read_matrix_moments();
+            }
+            GridVector z(equationTraits.gfs(),0.);
+            (*(*ertMatrixContainer).read_ls_moments()).apply(m,z,residual,1e-10);   // check if pointer is valid!
+            solution -= z;
+
+            return 1;
+          }
+      };
+
 
     /**
      * @brief Solver for stationary linear PDEs
@@ -525,6 +623,171 @@ namespace Dune {
           return cfl * igo.suggestTimestep(givendt);
         }
     };
+
+    /**
+     * @brief Solver for stationary linear PDEs using reordered GridView
+     *
+     */
+    template<typename Traits, typename ModelType, typename DirectionType>
+      class Solver_Reordered_Grid
+      {
+        private:
+
+          typedef typename Traits::GridTraits::GridView    OrigGV;
+          typedef typename Traits::GridTraits::RangeField  RF;
+          typedef typename Traits::GridTraits::DomainField DF;
+
+          typedef typename EquationTraits<Traits,ModelType,DirectionType>::GridFunctionSpace      OrigGFS;
+          typedef typename EquationTraits<Traits,ModelType,DirectionType>::GridVector             OrigGridVector;
+          using Parameter = ModelParameters<Traits,ModelType>;
+          using DiscType   = typename EquationTraits<Traits,ModelType,DirectionType>::DiscretizationType;
+          using LOP = SpatialOperator<Traits,ModelType,DiscType,DirectionType>;
+          using TLOP = TemporalOperator<Traits,ModelType,DiscType,DirectionType>;
+          typedef typename Dune::PDELab::ImplicitEulerParameter<RF> Method;
+
+          typedef typename EquationTraits<Traits,ModelType,DirectionType>::FEM                             FEM;
+          typedef typename EquationTraits<Traits,ModelType,DirectionType>::CON                             CON;
+          typedef typename EquationTraits<Traits,ModelType,DirectionType>::VBE                             VBE;
+          typedef ReorderedGridView<OrigGV,Parameter>                      ReorderedGV;
+          typedef Dune::PDELab::GridFunctionSpace<ReorderedGV,FEM,CON,VBE> ReorderedGFS;
+
+          typedef typename Dune::PDELab::Backend::Vector<ReorderedGFS,RF> ReorderedGridVector;
+
+          // Finite Elements and vector spaces
+          typedef typename OrigGFS::template ConstraintsContainer<RF>::Type C;
+
+          // Matrices and solvers
+          typedef Dune::PDELab::istl::BCRSMatrixBackend<> MBE;
+          typedef Dune::PDELab::GridOperator<ReorderedGFS,ReorderedGFS,LOP,MBE,DF,RF,RF,C,C> GO;
+          typedef typename GO::template MatrixContainer<RF>::Type M;
+
+          typedef Dune::PDELab::ISTLBackend_OVLP_BCGS_SSORk<ReorderedGFS,C> LS;
+
+          const Traits& traits;
+          const Dune::ParameterTree& config;
+          const EquationTraits<Traits,ModelType,DirectionType>&      equationTraits;
+          const Parameter&           parameter;
+
+          const C& cg;
+          using ERTMatrixContainer = typename Traits::ERTMatrixContainer;
+        public:
+
+          /**
+           * @brief Constructor
+           */
+          Solver_Reordered_Grid(
+              const Traits& traits_, const EquationTraits<Traits,ModelType,DirectionType>& equationTraits,
+              const C& cg_, Parameter& parameter_, RF Tend,std::shared_ptr<typename Traits::ERTMatrixContainer>& ertMatrixContainer_)
+            : traits(traits_),config(traits.config()), equationTraits(equationTraits), parameter(parameter_), cg(cg_)
+          {
+            const unsigned int rank = equationTraits.gfs().gridView().comm().rank();
+            if (rank == 0) std::cout << "stationary linear (reordered) solver" << std::endl;
+          }
+
+          /**
+           * @brief Compute solution (since problem is stationary)
+           */
+          unsigned int step(RF time, RF timestep, OrigGridVector& oldSolution, OrigGridVector& solution)
+          {
+            // construct locally because of reordering
+            ReorderedGV gv(equationTraits.gfs().gridView(),parameter);
+            gv.reorder(PressureLikeOrdering());
+
+            FEM fem(Dune::GeometryType(Dune::GeometryType::cube,Traits::GridTraits::dim));
+            ReorderedGFS gfs(gv,fem);
+            LOP lop(traits,parameter);
+            //C c;
+            //Dune::PDELab::constraints(gfs,c);
+            MBE mbe(9);
+            GO go(gfs,cg,gfs,cg,lop,mbe);
+            M m(go);
+            LS ls(gfs,cg,config.get<unsigned int>("solver.linSteps"),5,true);
+
+            ReorderedGridVector reorderedSolution(gfs,0.);
+            reorderSolution(gfs,solution,reorderedSolution);
+
+            m = 0.;
+            go.jacobian(reorderedSolution,m);
+
+            ReorderedGridVector residual(gfs,0.);
+            lop.setTime(time+timestep);
+            go.residual(reorderedSolution, residual);
+
+            ReorderedGridVector z(gfs,0.);
+            ls.apply(m,z,residual,1e-10);
+            reorderedSolution -= z;
+
+            originalSolution(gfs,reorderedSolution,solution);
+
+            return 1;
+          }
+
+        private:
+
+          void reorderSolution(ReorderedGFS& gfs, OrigGridVector& origSolution, ReorderedGridVector& reorderedSolution) const
+          {
+            typedef typename FEM::Traits::FiniteElementType::Traits::LocalBasisType LocalBasisType;
+            Dune::PDELab::LocalBasisCache<LocalBasisType> cache;
+
+            typedef Dune::PDELab::LocalFunctionSpace<ReorderedGFS> ReorderedLFS;
+            typedef Dune::PDELab::LocalFunctionSpace<OrigGFS>      OrigLFS;
+            typedef Dune::PDELab::LFSIndexCache<ReorderedLFS>      ReorderedLFSCache;
+            typedef Dune::PDELab::LFSIndexCache<OrigLFS>           OrigLFSCache;
+            ReorderedLFS lfs(gfs);
+            OrigLFS      origLfs(equationTraits.gfs());
+            ReorderedLFSCache lfsCache(lfs);
+            OrigLFSCache      origLfsCache(origLfs);
+            typename ReorderedGridVector::template LocalView<ReorderedLFSCache> localView(reorderedSolution);
+            typename OrigGridVector     ::template LocalView<OrigLFSCache>      origLocalView(origSolution);
+
+            for (const auto& elem : elements(equationTraits.gfs().gridView(),Dune::Partitions::interior))
+            {
+              lfs.    bind(elem);
+              origLfs.bind(elem);
+              lfsCache.    update();
+              origLfsCache.update();
+              localView.    bind(lfsCache);
+              origLocalView.bind(origLfsCache);
+              std::vector<RF> local(lfs.size(),0.);
+
+              origLocalView.read(local);
+              localView.    write(local);
+            }
+          }
+
+          void originalSolution(ReorderedGFS& gfs, ReorderedGridVector& reorderedSolution, OrigGridVector& origSolution) const
+          {
+            typedef typename FEM::Traits::FiniteElementType::Traits::LocalBasisType LocalBasisType;
+            Dune::PDELab::LocalBasisCache<LocalBasisType> cache;
+
+            typedef Dune::PDELab::LocalFunctionSpace<ReorderedGFS> ReorderedLFS;
+            typedef Dune::PDELab::LocalFunctionSpace<OrigGFS>      OrigLFS;
+            typedef Dune::PDELab::LFSIndexCache<ReorderedLFS>      ReorderedLFSCache;
+            typedef Dune::PDELab::LFSIndexCache<OrigLFS>           OrigLFSCache;
+            ReorderedLFS lfs(gfs);
+            OrigLFS      origLfs(equationTraits.gfs());
+            ReorderedLFSCache lfsCache(lfs);
+            OrigLFSCache      origLfsCache(origLfs);
+            typename ReorderedGridVector::template LocalView<ReorderedLFSCache> localView(reorderedSolution);
+            typename OrigGridVector     ::template LocalView<OrigLFSCache>      origLocalView(origSolution);
+
+            for (const auto& elem : elements(equationTraits.gfs().gridView(),Dune::Partitions::interior))
+            {
+              lfs.    bind(elem);
+              origLfs.bind(elem);
+              lfsCache.    update();
+              origLfsCache.update();
+              localView.    bind(lfsCache);
+              origLocalView.bind(origLfsCache);
+              std::vector<RF> local(lfs.size(),0.);
+
+              localView.    read(local);
+              origLocalView.write(local);
+            }
+          }
+
+      };
+
 
     /**
      * @brief Solver for transient PDEs using explicit timestepping scheme

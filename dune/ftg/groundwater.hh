@@ -30,14 +30,11 @@ namespace Dune {
         const Traits& traits;
 
         std::shared_ptr<SolutionStorage<Traits,ModelTypes::Groundwater,Direction::Forward> > forwardStorage;
-        //std::shared_ptr<SolutionStorage<Traits,ModelTypes::Groundwater,Direction::Adjoint> > adjointStorage;
 
         std::shared_ptr<ParameterField> conductivityField;
-        std::shared_ptr<ParameterField> storativityField;
 
         public:
           unsigned int model_number = 0; // we need this, as the number is requested for ERT models
-          //RF dt_CFL;
 
         ModelParameters(const Traits& traits_, const std::string& name)
           : ModelParametersBase<Traits>(name), traits(traits_)
@@ -59,22 +56,11 @@ namespace Dune {
         }
 
         /**
-         * @brief Set internal storage object for adjoint solution
-         */
-        /*void setStorage(
-            const std::shared_ptr<SolutionStorage<Traits,ModelTypes::Groundwater,Direction::Adjoint> > storage
-            )
-        {
-          adjointStorage = storage;
-        }*/
-
-        /**
          * @brief Provide access to underlying parameter fields
          */
         void setParameterList(const std::shared_ptr<const ParameterList>& list)
         {
           conductivityField = (*list).get("conductivity");
-          storativityField  = (*list).get("storativity");
         }
 
         /**
@@ -136,21 +122,14 @@ namespace Dune {
             return value[0];
           }
 
-        /**
-         * @brief Storativity value at given position
-         */
-        template<typename Element, typename Domain, typename Time>
-          RF stor(const Element& elem, const Domain& x, const Time& t) const
+        template<typename Element, typename Domain>
+          RF head(const Element& elem, const Domain& x) const
           {
-            if (!storativityField)
-            {
-              std::cout << "ModelParameters::stor " << this->name() << " " << this << std::endl;
-              DUNE_THROW(Dune::Exception,"storativity field not set in groundwater model parameters");
-            }
-
-            typename Traits::GridTraits::Scalar value;
-            (*storativityField).evaluate(elem,x,value);
-            return value[0];
+            typename Traits::GridTraits::Scalar localHead;
+            const auto& global  = elem.geometry().global(x);
+            const auto& xInside = elem.geometry().local(global);
+            (*forwardStorage).value(traits.config().template get<RF>("time.end"),elem,xInside,localHead);
+            return localHead;
           }
 
         /**
@@ -196,6 +175,7 @@ namespace Dune {
             return output;
           }
 
+          // this does not work correctly! use the other CFL implementation...
           template<typename Element, typename Time>
           RF dt_CFL(const Element& elem, const Time& time) const
           {
@@ -221,8 +201,6 @@ namespace Dune {
               {
                 norm += std::abs(localFlux[i])/dx[i];
               }
-              //for (const auto& entry : localFlux)
-              //  norm += entry*entry;
               norm = 1/norm;
 
               output = std::max(output,norm);
@@ -230,18 +208,6 @@ namespace Dune {
 
             return output;
           }
-
-
-
-        /**
-         * @brief Adjoint source term based on measurements
-         */
-        /*template<typename Element, typename Domain, typename Time>
-          RF adjointSource(const Element& elem, const Domain& x, const Time& t) const
-          {
-            // only needed for adjoint
-            return 0.;
-          }*/
 
         /**
          * @brief Make ModelParameters of different model available && make this model available for the others!
@@ -303,29 +269,15 @@ namespace Dune {
 
           using DiscretizationType = Discretization::CellCenteredFiniteVolume;
 
-          // use linear solver in stationary case,
-          // implicit linear solver for transient case
           template<typename... T>
             using StationarySolver = StationaryLinearSolver_CG_AMG_SSOR<T...>;
           template<typename... T>
             using TransientSolver  = ImplicitLinearSolver<T...>;
-
-          // use implicit euler for timestepping
-          // alternative: Alexander2
           using OneStepScheme = Dune::PDELab::ImplicitEulerParameter<RangeField>;
-
-          // use RT0 flux reconstruction
-          // alternatives: BDM1 and RT1
           template<typename... T>
             using FluxReconstruction = RT0Reconstruction<T...>;
-
-          // store complete space-time solution
-          // alternative: only store last two steps
           template<typename... T>
             using StorageContainer = LastTwoContainer<T...>;
-
-          // use next timestep when interpolating stored solution
-          // alternatives: PreviousTimestep and LinearInterpolation
           template<typename... T>
             using TemporalInterpolation = NextTimestep<T...>;
 
@@ -411,28 +363,6 @@ namespace Dune {
       };
 
     /**
-     * @brief Source term of adjoint groundwater flow equation
-     */
-    /*template<typename Traits>
-      class SourceTerm<Traits, ModelTypes::Groundwater, Direction::Adjoint>
-      {
-        const ModelParameters<Traits,ModelTypes::Groundwater>& parameters;
-
-        public:
-
-        SourceTerm(const ModelParameters<Traits,ModelTypes::Groundwater>& parameters_)
-          : parameters(parameters_)
-        {}
-
-        template<typename Element, typename Domain, typename Time>
-          auto q (const Element& elem, const Domain& x, const Time& t) const
-          {
-            // adjoint source depends on parameters / measurements
-            return parameters.adjointSource(elem,x,t);
-          }
-      };*/
-
-    /**
      * @brief Define groundwater equation as a differential equation
      */
     template<typename Traits, typename DomainType, typename DirectionType>
@@ -475,7 +405,6 @@ namespace Dune {
         enum {doAlphaSkeleton  = true};
         enum {doAlphaBoundary  = true};
         enum {doLambdaVolume   = true};
-        //enum {doLambdaSkeleton = DirectionType::isAdjoint()};
         enum {doLambdaSkeleton = false};
         enum {doLambdaBoundary = true};
 
@@ -546,26 +475,6 @@ namespace Dune {
           {
             const Domain& cellCenterLocal = referenceElement(eg.geometry()).position(0,0);
             r.accumulate(lfsv,0, - sourceTerm.q(eg.entity(),cellCenterLocal,time));
-
-            /*if (DirectionType::isAdjoint())
-            {
-              RF q = 0.;
-
-              Dune::GeometryType geometrytype = eg.geometry().type();
-              /// @todo order
-              const Dune::QuadratureRule<DF, dim>& rule = Dune::QuadratureRules<DF, dim>::rule(geometrytype, 2);
-
-              // loop over quadrature points 
-              for(const auto& point : rule) 
-              {
-                const Domain& x = point.position();
-                const RF factor = point.weight() * eg.geometry().integrationElement(x);
-
-                q += sourceTerm.q(eg.entity(),x,time) * factor;
-              }
-
-              r.accumulate(lfsv,0, -q);
-            }*/
           }
 
         /**

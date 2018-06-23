@@ -30,7 +30,6 @@ namespace Dune {
         const Traits& traits;
 
         std::shared_ptr<SolutionStorage<Traits,ModelTypes::Moments_ERT,Direction::Forward> > forwardStorage;
-        //std::shared_ptr<SolutionStorage<Traits,ModelTypes::Moments_ERT,Direction::Adjoint> > adjointStorage;
 
         std::shared_ptr<ParameterField> sigma_bgField;
         std::shared_ptr<ParameterField> kappaField;
@@ -114,7 +113,6 @@ namespace Dune {
           return timestep();
         }
 
-        // electrical conductivity based on concentration transformation in each element
         template<typename Element, typename Domain, typename Time>
           RF sigma (const Element& elem, const Domain& x, const Time& time) const
           {
@@ -128,7 +126,6 @@ namespace Dune {
             return sigma_bg[0];
           }
 
-        // electrical conductivity based on concentration transformation in each element
         template<typename Element, typename Domain, typename Time>
           RF kappa (const Element& elem, const Domain& x, const Time& time) const
           {
@@ -221,29 +218,15 @@ namespace Dune {
 
           using DiscretizationType = Discretization::CellCenteredFiniteVolume;
 
-          // use linear solver in stationary case,
-          // explicit linear solver for transient case
           template<typename... T>
-            using StationarySolver = StationaryLinearSolver_BCGS_AMG_ILU0<T...>;
+            using StationarySolver = StationaryLinearSolver_BCGS_AMG_ILU0_reuse_matrix<T...>;
           template<typename... T>
             using TransientSolver  = ExplicitLinearSolver<T...>;
-
-          // use explicit Euler for timestepping
-          // alternative: Heun
           using OneStepScheme = Dune::PDELab::ExplicitEulerParameter<RangeField>;
-
-          // use RT0 flux reconstruction
-          // alternatives: BDM1 and RT1
           template<typename... T>
             using FluxReconstruction = RT0Reconstruction<T...>;
-
-          // store complete space-time solution
-          // alternative: only store last two steps
           template<typename... T>
             using StorageContainer = LastTwoContainer<T...>;
-
-          // use previous timestep when interpolating stored solution
-          // alternatives: NextTimestep and LinearInterpolation
           template<typename... T>
             using TemporalInterpolation = PreviousTimestep<T...>;
 
@@ -347,7 +330,6 @@ namespace Dune {
         std::map<unsigned int, std::pair<RF, bool>> well_cells;
 
         RF time;
-        RF kth;
 
         public:
 
@@ -361,7 +343,6 @@ namespace Dune {
           : traits(traits_), parameters(parameters_), boundary(traits,parameters.name()), lgv(traits_.grid().leafGridView()) 
         {
           well_cells = parameters.well_cells();
-          kth = parameters.model_number;
         }
 
         /**
