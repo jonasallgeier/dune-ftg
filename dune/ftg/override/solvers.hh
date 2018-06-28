@@ -4,9 +4,9 @@
 #define DUNE_MODELLING_SOLVERS_HH
 
 #include<dune/pdelab/finiteelement/localbasiscache.hh>
+#include<dune/ftg/override/linearproblem.hh>
+#include<dune/ftg/override/onestepparameter.hh>
 #include<dune/pdelab/gridoperator/onestep.hh>
-#include<dune/pdelab/stationary/linearproblem.hh>
-#include<dune/pdelab/instationary/onestepparameter.hh>
 
 #include<dune/modelling/declarations.hh>
 #include<dune/ftg/reorderedgridview.hh>
@@ -418,6 +418,7 @@ namespace Dune {
           using P0GFS = Dune::PDELab::GridFunctionSpace<typename Traits::GridTraits::GridView,P0FEM,P0CON,P0VBE>;
           using P0C   = typename P0GFS::template ConstraintsContainer<RF>::Type;
           using LS    = Dune::PDELab::ISTLBackend_CG_AMG_SSOR<IGO>;
+          //using LS    = Dune::PDELab::ISTLBackend_BCGS_AMG_ILU0<IGO>;
 
           using PDESolver = Dune::PDELab::StationaryLinearProblemSolver<IGO,LS,GridVector>;
           using OSM       = Dune::PDELab::OneStepMethod<RF,IGO,PDESolver,GridVector,GridVector>;
@@ -469,11 +470,11 @@ namespace Dune {
             p0fem(Dune::GeometryType(Dune::GeometryType::cube,Traits::GridTraits::dim)),
             p0gfs(equationTraits.gfs().gridView(),p0fem),
             //ls(igo,cg,p0gfs,p0cg,config.sub("amg")), solver(igo,ls,1e-6),
-            ls(equationTraits.gfs()), solver(igo,ls,1e-6),
+            ls(equationTraits.gfs(),5000,0,true,true), solver(igo,ls,1e-6),
             osm(method,igo,solver),
             ertMatrixContainer(ertMatrixContainer_)
         {
-          osm.setVerbosityLevel(config.get<int>("solver.verbosity",3));
+          osm.setVerbosityLevel(config.get<int>("solver.verbosity",0));
         }
 
           /**
@@ -481,7 +482,10 @@ namespace Dune {
            */
           unsigned int step(RF timeFrom, RF timestep, GridVector& oldSolution, GridVector& newSolution)
           {
-            osm.apply(timeFrom,timestep,oldSolution,newSolution);
+            if (timeFrom == 0)
+              osm.apply(timeFrom,timestep,oldSolution,newSolution,false);
+            else
+              osm.apply(timeFrom,timestep,oldSolution,newSolution,true);
             return 1;
           }
 
@@ -523,8 +527,8 @@ namespace Dune {
           using P0CON = Dune::PDELab::P0ParallelConstraints;
           using P0GFS = Dune::PDELab::GridFunctionSpace<typename Traits::GridTraits::GridView,P0FEM,P0CON,P0VBE>;
           using P0C   = typename P0GFS::template ConstraintsContainer<RF>::Type;
-          using LS    = Dune::PDELab::ISTLBackend_CG_AMG_SSOR<IGO>;
-
+          //using LS    = Dune::PDELab::ISTLBackend_CG_AMG_SSOR<IGO>;
+          using LS    = Dune::PDELab::ISTLBackend_BCGS_AMG_ILU0<IGO>;
           using PDESolver = Dune::PDELab::StationaryLinearProblemSolver<IGO,LS,GridVector>;
           using OSM       = Dune::PDELab::OneStepMethod<RF,IGO,PDESolver,GridVector,GridVector>;
 
@@ -576,11 +580,11 @@ namespace Dune {
             p0fem(Dune::GeometryType(Dune::GeometryType::cube,Traits::GridTraits::dim)),
             p0gfs(equationTraits.gfs().gridView(),p0fem),
             //ls(igo,cg,p0gfs,p0cg,config.sub("amg")), solver(igo,ls,1e-6),
-            ls(equationTraits.gfs()), solver(igo,ls,1e-6),
+            ls(equationTraits.gfs(),5000,0,true,true), solver(igo,ls,1e-6), 
             osm(method,igo,solver),
             ertMatrixContainer(ertMatrixContainer_)
         {
-          osm.setVerbosityLevel(config.get<int>("solver.verbosity",3));
+          osm.setVerbosityLevel(config.get<int>("solver.verbosity",0));
         }
 
           /**
@@ -588,7 +592,10 @@ namespace Dune {
            */
           unsigned int step(RF timeFrom, RF timestep, GridVector& oldSolution, GridVector& newSolution)
           {
-            osm.apply(timeFrom,timestep,oldSolution,newSolution);
+            if (timeFrom == 0)
+              osm.apply(timeFrom,timestep,oldSolution,newSolution,false);
+            else
+              osm.apply(timeFrom,timestep,oldSolution,newSolution,true);
             return 1;
           }
 
@@ -676,9 +683,9 @@ namespace Dune {
            * @brief Constructor
            */
           Solver_Reordered_Grid(
-              const Traits& traits_, const EquationTraits<Traits,ModelType,DirectionType>& equationTraits,
+              const Traits& traits_, const EquationTraits<Traits,ModelType,DirectionType>& equationTraits_,
               const C& cg_, Parameter& parameter_, RF Tend,std::shared_ptr<typename Traits::ERTMatrixContainer>& ertMatrixContainer_)
-            : traits(traits_),config(traits.config()), equationTraits(equationTraits), parameter(parameter_), cg(cg_)
+            : traits(traits_),config(traits.config()), equationTraits(equationTraits_), parameter(parameter_), cg(cg_)
           {
             const unsigned int rank = equationTraits.gfs().gridView().comm().rank();
             if (rank == 0) std::cout << "stationary linear (reordered) solver" << std::endl;
@@ -694,12 +701,14 @@ namespace Dune {
             gv.reorder(PressureLikeOrdering());
 
             FEM fem(Dune::GeometryType(Dune::GeometryType::cube,Traits::GridTraits::dim));
+            //Dune::PDELab::PartitionViewEntitySet<ReorderedGV,Dune::Partitions::All > es(gv,0);
             ReorderedGFS gfs(gv,fem);
+            //ReorderedGFS gfs(es,fem);
             LOP lop(traits,parameter);
-            //C c;
-            //Dune::PDELab::constraints(gfs,c);
+            C c;
+            Dune::PDELab::constraints(gfs,c);
             MBE mbe(9);
-            GO go(gfs,cg,gfs,cg,lop,mbe);
+            GO go(gfs,c,gfs,c,lop,mbe);
             M m(go);
             LS ls(gfs,cg,config.get<unsigned int>("solver.linSteps"),5,true);
 

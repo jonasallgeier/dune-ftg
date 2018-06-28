@@ -46,10 +46,7 @@ namespace Dune{
 
     template<typename GridView, typename Parameter>
       class ReorderedIndexSet
-      : public Dune::IndexSet<typename GridView::Grid,
-      ReorderedIndexSet<GridView,Parameter>,
-      typename GridView::IndexSet::IndexType,
-      typename GridView::IndexSet::Types>
+      : public Dune::IndexSet<GridView,ReorderedIndexSet<GridView,Parameter>,typename GridView::IndexSet::IndexType>
       {
         typedef typename GridView::Grid     Grid;
         typedef typename GridView::IndexSet Backend;
@@ -60,7 +57,6 @@ namespace Dune{
 
         // Type of base class index type
         typedef typename Backend::IndexType IndexType;
-        typedef typename Backend::Types Types;
 
         private:
 
@@ -306,13 +302,6 @@ namespace Dune{
 
       };
 
-    template<typename GridView, typename Parameter>
-      class ReorderedGridViewTraits
-      : public GridView::Traits
-      {
-        public:
-          typedef ReorderedIndexSet<GridView, Parameter> IndexSet;
-      };
 
     /* ************************************************************ *
      * Grid view with reordered index set.
@@ -338,7 +327,6 @@ namespace Dune{
           // Internal index set with vertical index running fastest
           typedef ReorderedIndexSet<GridView, Parameter> IndexSet;
           typedef typename IndexSet::IndexType IndexType;
-          typedef ReorderedGridViewTraits<GridView,Parameter> Traits;
 
           const Parameter& param;
           IndexSet reorderedIndexSet; 

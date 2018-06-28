@@ -10,6 +10,12 @@
 #include <dune/common/parallel/mpihelper.hh>
 #include <dune/common/exceptions.hh>
 
+// use modified solver onestep schemes, that allow matrix reusage
+#include<dune/ftg/override/onestep.hh>
+#include<dune/ftg/override/onestep_1.hh>
+#include<dune/ftg/override/linearproblem.hh>
+#include<dune/ftg/override/onestepparameter.hh>
+
 // use slightly modified versions of dune/modelling/boundary.hh, ./equation.hh and ./forwardmodel.hh
 #include<dune/ftg/override/boundary.hh>
 #include<dune/ftg/override/equation.hh>
@@ -20,7 +26,6 @@
 #include<dune/ftg/geoelectrics.hh>
 #include<dune/ftg/moments_ERT.hh> // is needed, because it is used in modelTraits
 #include<dune/ftg/ftg.hh>
-
 using namespace Dune::Modelling;
 
 void transient(int argc, char** argv, bool evaluateBasePotentials)
