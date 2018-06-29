@@ -474,6 +474,7 @@ class ModelTraits
         bool writeTransport; 
         bool writeMomentsTransport;
         bool writeMomentsERT;      
+        bool writeFlow;
 
         auto& index_set() const
         {
@@ -523,7 +524,8 @@ class ModelTraits
         writeERT              = traits.config().template get<bool>("output.writeERT",false); 
         writeTransport        = traits.config().template get<bool>("output.writeTransport",false); 
         writeMomentsTransport = traits.config().template get<bool>("output.writeMomentsTransport",false);
-        writeMomentsERT       = traits.config().template get<bool>("output.writeMomentsERT",false);      
+        writeMomentsERT       = traits.config().template get<bool>("output.writeMomentsERT",false);
+        writeFlow             = traits.config().template get<bool>("output.writeFlow",false);      
       }
 
         void setTimes(const RF& one, const RF& two)
@@ -544,11 +546,43 @@ class ModelTraits
             const std::string & modelname, const unsigned int& modelNumber,const std::string& timeString, Dune::Timer&  printTimer)              
         {
           // determine which modeltype we have and if the output is desired; could probably be performed using templates (I don't know how)
+          bool isFlow             = (modelname.find("groundwaterFlow") == 0);
           bool isERT              = (modelname.find("ERT_") == 0);
           bool isTransport        = (modelname.find("soluteTransport") == 0);
           bool isMomentsTransport = (modelname.find("momentsTransport_") == 0);
           bool isMomentsERT       = (modelname.find("momentsERT_") == 0);
           
+          // print complete concentration field to ASCII file
+          if (writeFlow && isFlow)
+          {
+            printTimer.start();
+            if (traits.rank() == 0)
+            {
+              std::cout << "printing flow field" << std::endl;
+            }            
+            std::map<std::pair<RF, RF>, std::map<RF, RF> > output_flow_field; // <x,y> <z,value> 
+            const typename GridTraits::Domain x = {0.5, 0.5, 0.5}; // get value at cell center
+
+            std::string filenamebase = traits.config().template get<std::string>("output.writeFlowFilename","resultsFlow");
+            std::string filename = filenamebase + "_field_" + std::to_string(traits.rank()) + ".data";
+            
+            std::ofstream outfile;
+            outfile.open(filename, std::ios::out | std::ios::trunc);
+            outfile << "x y z h" << std::endl;
+
+            for (const auto & elem : elements (traits.grid().leafGridView()))
+            {
+              typename GridTraits::Scalar output = 0.0;  
+              (*storage).value(time,elem,x,output);
+
+              outfile << elem.geometry().global(x)[0] << " " << elem.geometry().global(x)[1] << " ";
+              outfile << elem.geometry().global(x)[2] << " " << output << std::endl;
+            }
+            outfile.close();
+            printTimer.stop();
+          }
+
+
           if (writeERT && isERT)
           {
             printTimer.start();
