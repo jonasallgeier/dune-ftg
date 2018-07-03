@@ -202,6 +202,7 @@ namespace Dune {
           const Traits& traits;
           unsigned int highest_moment;
           ModelVector list;
+
           std::vector<bool> isInitialized;
         public:
 
@@ -229,7 +230,6 @@ namespace Dune {
               // create model and insert it in list
               const std::shared_ptr<Model> model(new Model(traits,name));
               list.push_back({name,model});
-
               isInitialized.push_back(false);
 
               // register parameters of given models in each other

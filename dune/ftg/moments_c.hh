@@ -242,8 +242,8 @@ namespace Dune {
 
           using DiscretizationType = Discretization::CellCenteredFiniteVolume;
           template<typename... T>
-            //using StationarySolver = StationaryLinearSolver_BCGS_AMG_ILU0<T...>;
-            using StationarySolver = Solver_Reordered_Grid<T...>;          
+            using StationarySolver = StationaryLinearSolver_BCGS_AMG_ILU0<T...>;
+            //using StationarySolver = Solver_Reordered_Grid<T...>;          
           template<typename... T>
             using TransientSolver  = ExplicitLinearSolver<T...>;
           using OneStepScheme = Dune::PDELab::ImplicitEulerParameter<RangeField>;

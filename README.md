@@ -14,7 +14,7 @@ The module can be compiled as any other DUNE module. The source file is located 
 * a set of hdf5 property fields in ./fields/ 
 * modelling.ini, a text file containing all run time relevant model information
 
-The compiled program can be used via the command line. __Important:__ due to a suspected issue in the dune-randomfield module, the program can only run in parallel! The according syntax is `mpirun -np # ./dune-ftg`, where # is the number of processors.
+The compiled program can be used via the command line.
 
 For further information regarding this specific dune-module, feel free to contact me.
 

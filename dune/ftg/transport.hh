@@ -129,7 +129,12 @@ namespace Dune {
               DUNE_THROW(Dune::Exception,"groundwater model parameters not set in transport model parameters");
             
             const auto& global = is.geometry().global(x);
-            return (*groundwaterParams).flux(is,x,t)/porosity(global); // division by porosity!
+            if ((global[0] == 0.0) && (global[1] == 0.25) && (global[2]==-6.5))
+            {
+              std::cout << "Test condition reached" << std::endl;
+            }
+            RF v= (*groundwaterParams).flux(is,x,t)/porosity(global);
+            return v; // division by porosity!
           }
 
         /**
@@ -341,7 +346,7 @@ namespace Dune {
       : public Dune::PDELab::NumericalJacobianSkeleton<SpatialOperator
       <Traits, ModelTypes::Transport, Discretization::CellCenteredFiniteVolume, DirectionType> >,
       public Dune::PDELab::NumericalJacobianVolume
-      <TemporalOperator<Traits, ModelTypes::Transport, Discretization::CellCenteredFiniteVolume, DirectionType> >,
+        <SpatialOperator<Traits, ModelTypes::Transport, Discretization::CellCenteredFiniteVolume, DirectionType> >,
       public Dune::PDELab::NumericalJacobianBoundary
         <SpatialOperator<Traits, ModelTypes::Transport, Discretization::CellCenteredFiniteVolume, DirectionType> >,
       public Dune::PDELab::FullSkeletonPattern, 
@@ -365,8 +370,8 @@ namespace Dune {
         enum {doAlphaVolume   = true};
         enum {doAlphaSkeleton = true};
         enum {doAlphaBoundary = true};
-        enum {doLambdaSkeleton = false};
-        enum {doLambdaBoundary = false};
+        //enum {doLambdaSkeleton = false};
+        //enum {doLambdaBoundary = false};
 
         private:
 

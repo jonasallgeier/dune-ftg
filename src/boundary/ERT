@@ -12,11 +12,11 @@ time0   = 0 1 0
 
 [left0]
 limits  = -35 -20 35 0
-time0   = 0 0 1
+time0   = 0 0 0
 
 [right0]
 limits  = -35 -20 35 0
-time0   = 0 0 1
+time0   = 0 0 0
 
 [bottom0]
 limits  = -50 -35 50 35

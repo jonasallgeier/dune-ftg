@@ -111,15 +111,76 @@ namespace Dune {
             {
               // a well cell -> return very high conductivity to achieve "shortcut" or very low conductivity to achieve "packer"
               typename Traits::GridTraits::Scalar value;
-              value = 1.0;
+              value = 10.0;
               if ( (temp->second).first == 0.0)
-                value = 0;
+                value = 0.0;
               return value[0];
             }
             // no well cell
             typename Traits::GridTraits::Scalar value;
             (*conductivityField).evaluate(elem,x,value);
             return value[0];
+          }
+
+        /**
+         * @brief Conductivity value at given position
+         */
+        template<typename IS, typename Time>
+          RF cond_intersection(const IS& is, const Time& t) const
+          {
+            
+            if (!conductivityField)
+            {
+              std::cout << "ModelParameters::cond " << this->name() << " " << this << std::endl;
+              DUNE_THROW(Dune::Exception,"conductivity field not set in groundwater model parameters");
+            }
+
+            std::vector<int> cell_status; // 0: normal cell; 1: well cell; -1 packer cell
+            for (unsigned int i =0; i<2;i++)
+            {
+              auto elem = is.inside();
+              if (i == 1)
+                elem = is.outside();
+
+              unsigned int current_index = index_set().index(elem);
+              std::map<unsigned int,std::pair<RF,bool>> wellcells = well_cells(); // this step is necessary!
+              typename std::map<unsigned int,std::pair<RF,bool>>::iterator temp = wellcells.find(current_index);
+
+              if ( temp != wellcells.end() ) 
+              {
+                if ( (temp->second).first == 0.0)
+                  cell_status.push_back(-1);
+                else
+                  cell_status.push_back(1);
+              } else {cell_status.push_back(0);}
+            }
+            
+            if ((cell_status[0]==-1) || (cell_status[1]==-1) )
+            {
+              typename Traits::GridTraits::Scalar value = 0.0;
+              return value[0];  // if one cell is packer: K=0
+            }
+            if ((cell_status[0]==1) && (cell_status[1]==1))
+            {
+              typename Traits::GridTraits::Scalar value = 1.0;
+              return value[0];  // of both cells are well cells: K=1
+            }
+
+            // all other cases: K = havg(K1,K2)
+            std::vector<typename Traits::GridTraits::Scalar> values;                          
+            for (unsigned int i =0; i<2;i++)
+            {
+              auto elem = is.inside();
+              if (i == 1)
+                elem = is.outside();
+
+              auto x = referenceElement(elem.geometry()).position(0,0);
+              typename Traits::GridTraits::Scalar tmp;
+              (*conductivityField).evaluate(elem,x,tmp);
+              values.push_back(tmp);
+            }
+            const typename Traits::GridTraits::Scalar eps = 1e-30;
+            return 2./(1./(values[0] + eps) + 1./(values[1] + eps));
           }
 
         template<typename Element, typename Domain>
@@ -378,7 +439,7 @@ namespace Dune {
     template<typename Traits, typename DirectionType>
       class SpatialOperator<Traits, ModelTypes::Groundwater, Discretization::CellCenteredFiniteVolume, DirectionType>
       : public Dune::PDELab::NumericalJacobianSkeleton
-      <SpatialOperator<Traits, ModelTypes::Groundwater, Discretization::CellCenteredFiniteVolume, DirectionType> >,
+        <SpatialOperator<Traits, ModelTypes::Groundwater, Discretization::CellCenteredFiniteVolume, DirectionType> >,
       public Dune::PDELab::NumericalJacobianBoundary
         <SpatialOperator<Traits, ModelTypes::Groundwater, Discretization::CellCenteredFiniteVolume, DirectionType> >,
       public Dune::PDELab::FullSkeletonPattern, 
@@ -628,13 +689,14 @@ namespace Dune {
           RF skeletonNormalFlux(const Intersection& is, RF innerValue, RF outerValue, RF time) const
           {
             // geometry information
-            const Domain& cellCenterInside  = referenceElement(is.inside() .geometry()).position(0,0);
-            const Domain& cellCenterOutside = referenceElement(is.outside().geometry()).position(0,0);
+            //const Domain& cellCenterInside  = referenceElement(is.inside() .geometry()).position(0,0);
+            //const Domain& cellCenterOutside = referenceElement(is.outside().geometry()).position(0,0);
 
-            // b gconductivity
-            const RF K_inside  = parameters.cond(is.inside(), cellCenterInside, time);
-            const RF K_outside = parameters.cond(is.outside(),cellCenterOutside,time);
-            const RF K = havg(K_inside,K_outside);
+            // conductivity
+            //const RF K_inside  = parameters.cond(is.inside(), cellCenterInside, time);
+            //const RF K_outside = parameters.cond(is.outside(),cellCenterOutside,time);
+            //const RF K = havg(K_inside,K_outside);
+            const RF K = parameters.cond_intersection(is,time);
 
             return - K * skeletonNormalDerivative(is,innerValue,outerValue);
           }

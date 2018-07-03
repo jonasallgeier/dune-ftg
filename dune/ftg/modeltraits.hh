@@ -383,8 +383,6 @@ class ModelTraits
     {
       private:
         const ModelTraits& traits;
-        // this is bad! flexible code needed here! TODO
-
         using DiscType   = typename Dune::Modelling::EquationTraits<ModelTraits,ModelTypes::Geoelectrics>::DiscretizationType;
         using GFS        = typename Dune::Modelling::EquationTraits<ModelTraits,ModelTypes::Geoelectrics>::GridFunctionSpace;
         using GridVector = typename Dune::Modelling::EquationTraits<ModelTraits,ModelTypes::Geoelectrics>::GridVector;
