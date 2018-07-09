@@ -220,6 +220,7 @@ namespace Dune {
 
           template<typename... T>
             using StationarySolver = StationaryLinearSolver_BCGS_AMG_ILU0_reuse_matrix<T...>;
+            //using StationarySolver = StationaryLinearSolver_BCGS_AMG_ILU0<T...>;
           template<typename... T>
             using TransientSolver  = ExplicitLinearSolver<T...>;
             using OneStepScheme = Dune::PDELab::ExplicitEulerParameter<RangeField>;

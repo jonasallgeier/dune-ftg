@@ -296,8 +296,12 @@ namespace Dune {
                   if (k==highest_moment)
                   {
                     for (unsigned int j = 0; j<=highest_moment;j++)
+                    {
                       list[i-j].second->clearStorage();
+                      (list[i-j].second).reset();                    
+                    }
                     list[i-highest_moment-1].second->clearStorage();
+                    (list[i-highest_moment-1].second).reset();
                   }
                 }
               //}

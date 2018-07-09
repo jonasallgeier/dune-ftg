@@ -129,10 +129,10 @@ namespace Dune {
               DUNE_THROW(Dune::Exception,"groundwater model parameters not set in transport model parameters");
             
             const auto& global = is.geometry().global(x);
-            if ((global[0] == 0.0) && (global[1] == 0.25) && (global[2]==-6.5))
-            {
-              std::cout << "Test condition reached" << std::endl;
-            }
+            //if ((global[0] == 0.0) && (global[1] == 0.25) && (global[2]==-6.5))
+            //{
+            //  std::cout << "Test condition reached" << std::endl;
+            //}
             RF v= (*groundwaterParams).flux(is,x,t)/porosity(global);
             return v; // division by porosity!
           }

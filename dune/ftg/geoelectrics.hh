@@ -248,6 +248,7 @@ namespace Dune {
           using DiscretizationType = Discretization::CellCenteredFiniteVolume;
           template<typename... T>
             using StationarySolver = StationaryLinearSolver_CG_AMG_SSOR_reuse_matrix<T...>; // solver is modified for ERT matrix storage
+            //using StationarySolver = StationaryLinearSolver_CG_AMG_SSOR<T...>; // solver is modified for ERT matrix storage
           template<typename... T>
             using TransientSolver  = ImplicitLinearSolver<T...>;
           using OneStepScheme = Dune::PDELab::ImplicitEulerParameter<RangeField>;

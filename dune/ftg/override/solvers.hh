@@ -108,7 +108,7 @@ namespace Dune {
               m = (*ertMatrixContainer).read_matrix_ERT();
             }
             GridVector z(equationTraits.gfs(),0.);
-            (*(*ertMatrixContainer).read_ls_ERT()).apply(m,z,residual,1e-6);   // check if pointer is valid!
+            (*(*ertMatrixContainer).read_ls_ERT()).apply(m,z,residual,1e-12);   // check if pointer is valid!
             solution -= z;
 
             return 1;
@@ -192,7 +192,7 @@ namespace Dune {
             m = 0.;
             go.jacobian(solution,m);
             GridVector z(equationTraits.gfs(),0.);
-            ls.apply(m,z,residual,1e-10);
+            ls.apply(m,z,residual,1e-12);
             solution -= z;
 
             return 1;
@@ -290,7 +290,7 @@ namespace Dune {
               m = (*ertMatrixContainer).read_matrix_moments();
             }
             GridVector z(equationTraits.gfs(),0.);
-            (*(*ertMatrixContainer).read_ls_moments()).apply(m,z,residual,1e-10);   // check if pointer is valid!
+            (*(*ertMatrixContainer).read_ls_moments()).apply(m,z,residual,1e-12);   // check if pointer is valid!
             solution -= z;
 
             return 1;
@@ -374,7 +374,7 @@ namespace Dune {
             m = 0.;
             go.jacobian(solution,m);
             GridVector z(equationTraits.gfs(),0.);
-            ls.apply(m,z,residual,1e-10);
+            ls.apply(m,z,residual,1e-12);
             solution -= z;
 
             return 1;
@@ -470,7 +470,7 @@ namespace Dune {
             p0fem(Dune::GeometryType(Dune::GeometryType::cube,Traits::GridTraits::dim)),
             p0gfs(equationTraits.gfs().gridView(),p0fem),
             //ls(igo,cg,p0gfs,p0cg,config.sub("amg")), solver(igo,ls,1e-6),
-            ls(equationTraits.gfs(),5000,0,true,true), solver(igo,ls,1e-6),
+            ls(equationTraits.gfs(),5000,0,true,true), solver(igo,ls,1e-12),
             osm(method,igo,solver),
             ertMatrixContainer(ertMatrixContainer_)
         {
@@ -580,7 +580,7 @@ namespace Dune {
             p0fem(Dune::GeometryType(Dune::GeometryType::cube,Traits::GridTraits::dim)),
             p0gfs(equationTraits.gfs().gridView(),p0fem),
             //ls(igo,cg,p0gfs,p0cg,config.sub("amg")), solver(igo,ls,1e-6),
-            ls(equationTraits.gfs(),5000,0,true,true), solver(igo,ls,1e-6), 
+            ls(equationTraits.gfs(),5000,0,true,true), solver(igo,ls,1e-12), 
             osm(method,igo,solver),
             ertMatrixContainer(ertMatrixContainer_)
         {
@@ -723,7 +723,7 @@ namespace Dune {
             go.residual(reorderedSolution, residual);
 
             ReorderedGridVector z(gfs,0.);
-            ls.apply(m,z,residual,1e-10);
+            ls.apply(m,z,residual,1e-12);
             reorderedSolution -= z;
 
             originalSolution(gfs,reorderedSolution,solution);

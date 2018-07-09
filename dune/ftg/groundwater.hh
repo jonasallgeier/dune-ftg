@@ -96,7 +96,6 @@ namespace Dune {
         template<typename Element, typename Domain, typename Time>
           RF cond(const Element& elem, const Domain& x, const Time& t) const
           {
-            
             if (!conductivityField)
             {
               std::cout << "ModelParameters::cond " << this->name() << " " << this << std::endl;
@@ -128,7 +127,6 @@ namespace Dune {
         template<typename IS, typename Time>
           RF cond_intersection(const IS& is, const Time& t) const
           {
-            
             if (!conductivityField)
             {
               std::cout << "ModelParameters::cond " << this->name() << " " << this << std::endl;
@@ -414,10 +412,23 @@ namespace Dune {
             {
               unsigned int current_index = parameters.index_set().index(elem);
               auto temp = well_cells.find(current_index);
-
+              /*
+              RF x_min = elem.geometry().corner(0)[0];
+              RF x_max = elem.geometry().corner(1)[0];
+              RF y_min = elem.geometry().corner(0)[1];
+              RF y_max = elem.geometry().corner(2)[1];
+              RF z_min = elem.geometry().corner(0)[2];
+              RF z_max = elem.geometry().corner(4)[2];
+              */
               if ( !(temp->first == well_cells.end()->first) ) 
               {
-                return (temp->second).first; // a well cell, return extraction rate
+                RF rate = (temp->second).first;
+                //std::cout << "cell #" << current_index << ": " 
+                //          << x_min << " < x < " << x_max << " | " 
+                //          << y_min << " < y < " << y_max << " | "
+                //          << z_min << " < z < " << z_max << " | " 
+                //          << " Q: " << rate << std::endl; 
+                return rate; // a well cell, return extraction rate
               }
               return 0.0; // no well cell
             }

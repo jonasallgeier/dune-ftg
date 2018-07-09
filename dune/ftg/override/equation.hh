@@ -337,6 +337,9 @@ namespace Dune {
           void clearStorage()
           {
             (*storage).clear();
+            //solver.reset();
+            //newSolution = GridVector(equationTraits.gfs());
+            //oldSolution = GridVector(equationTraits.gfs());
           }
 
           /**

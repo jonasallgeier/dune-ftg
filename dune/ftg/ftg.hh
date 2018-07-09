@@ -76,20 +76,28 @@ void set_wells(auto modelTraits)
     {
       if (well_x[i]>=x_min && well_x[i]<x_max && well_y[i]>=y_min && well_y[i]<y_max)
       {
-        if (well_z2[i] <= z_min || well_z1[i] >= z_max)
+        if (!((well_z2[i] <= z_min) || (well_z1[i] >= z_max)))
         {
-          // well is outside of cell
-        } else {
-          // well is (partly) inside of cell
+          // well is (at least partly) inside of cell
           well_cells_temp.push_back(index_set.index(elem));
-          well_qs.push_back(well_q[i]);
           well_identities.push_back(i);
           well_injectionindicator.push_back(well_in[i]);
-         }
+          RF local_q;
+          RF V_well = (x_max-x_min)*(y_max-y_min)*(well_z2[i]-well_z1[i]);
+
+          RF local_max = std::min(z_max,well_z2[i]);
+          RF local_min = std::max(z_min,well_z1[i]);
+          RF h = local_max-local_min;
+          RF V_cell = (x_max-x_min)*(y_max-y_min)*h;
+
+          local_q = well_q[i]*V_cell/V_well;
+          well_qs.push_back(local_q);
+        }
       }
     }
   }
 
+/*
   // distribute well injection rates equally across all participating cells
   for (int i = 0; i<no_wells;i++)
   {
@@ -99,7 +107,7 @@ void set_wells(auto modelTraits)
       if (well_identities[j]==i) {well_qs[j] /= tmp;}
     }
   }
-  
+*/  
   // sum all injection rate contributions in a cell up, if a single contribution injects tracer -> this is a tracer injection cell
   std::vector<unsigned int> well_cell_indices = well_cells_temp;
   
