@@ -69,7 +69,7 @@ void moments(int argc, char** argv)
   set_wells<ModelTraits>(&modelTraits);
 
   // generate N ERT base potential models for N electrodes
-  for (int i = 0; i < modelTraits.electrodeconfiguration.no_electrodes; i++)
+  for (unsigned int i = 0; i < modelTraits.electrodeconfiguration.no_electrodes; i++)
   {
     std::string name = "ERT_" + std::to_string(i); // name for the n-th model is ERT_n
     forwardModelList.add<GeoelectricsModel>(name); // create a new geoelectrics model

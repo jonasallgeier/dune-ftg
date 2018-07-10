@@ -69,7 +69,7 @@ void transient(int argc, char** argv, bool evaluateBasePotentials)
   
   // generate N geoelectrics models for N electrodes
   std::stringstream temp_ss;
-  for (int i = 0; i < modelTraits.electrodeconfiguration.no_electrodes; i++)
+  for (unsigned int i = 0; i < modelTraits.electrodeconfiguration.no_electrodes; i++)
   {
     std::string name = "ERT_" + std::to_string(i); // name for the n-th model is ERT_n
     if (!modelTraits.basePotentialEvaluation)

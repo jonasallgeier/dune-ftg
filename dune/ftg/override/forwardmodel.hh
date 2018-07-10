@@ -68,6 +68,7 @@ namespace Dune {
           virtual void stepForward(typename Traits::GridTraits::RangeField timestep) = 0;
           virtual typename Traits::GridTraits::RangeField suggestTimestepForward() const = 0;
           virtual void clearStorage() = 0;
+          virtual void clearSolver() =0;
           virtual bool forwardFinished() const = 0;
           virtual typename Traits::GridTraits::RangeField getTime() const = 0;
       };
@@ -168,6 +169,11 @@ namespace Dune {
           virtual void clearStorage()
           {
             return equation.clearStorage();
+          }
+
+          virtual void clearSolver()
+          {
+            return equation.clearSolver();
           }
 
           virtual typename Traits::GridTraits::RangeField getTime() const
@@ -292,8 +298,28 @@ namespace Dune {
                     time = list[i].second->getTime();
                     // ERT data can be deleted after measurements, as they are not needed anymore
                     bool isERT = (list[i].first.find("ERT") == 0);
-                    if (isERT && (traits.basePotentialEvaluation==false)) // moments ERT need ERT base data!
+                    if (isERT) // moments ERT need ERT base data!
+                    {
                       list[i].second->clearStorage();
+
+                      std::string str = list[i].first;
+                      std::string common_base = "ERT_";
+                      auto start_position_to_erase = str.find(common_base);
+                      str.erase(start_position_to_erase, common_base.size());      
+                      
+                      std::stringstream ss; 
+                      ss << str;
+                      std::string temp;
+                      ss >> temp; // get the ERT model number
+                      unsigned int model_number;
+                      std::stringstream(temp) >> model_number;
+                      // do not delete the first or the second to last ERT model; they are needed
+                      if ( (model_number > 0) && (model_number+1 != traits.electrodeconfiguration.no_electrodes-1 ) )
+                      {
+                        (list[i].second)->clearSolver();
+                        //isInitialized[i] = false;
+                      }
+                    } 
                   }
                 }
               }
@@ -311,11 +337,35 @@ namespace Dune {
                 {
                   list.back().second->stepForward(timestep);
                   time = list.back().second->getTime();
-                  // ERT data can be deleted after measurements, as they are not needed anymore
-                  bool isERT = (list.back().first.find("ERT") == 0);
-                  if (isERT && (traits.basePotentialEvaluation==false)) // moments ERT need ERT base data!
-                    list.back().second->clearStorage();
                 }
+                // ERT data can be deleted after measurements, as they are not needed anymore
+                bool isERT = (list.back().first.find("ERT") == 0);
+                if (isERT) // moments ERT need ERT base data!
+                {
+                  list.back().second->clearStorage();
+
+                  std::string str = list.back().first;
+                  std::string common_base = "ERT_";
+                  auto start_position_to_erase = str.find(common_base);
+                  str.erase(start_position_to_erase, common_base.size());      
+                  
+                  std::stringstream ss; 
+                  ss << str;
+                  std::string temp;
+                  ss >> temp; // get the ERT model number
+                  unsigned int model_number;
+                  std::stringstream(temp) >> model_number;
+                  if ( (model_number > 0) )
+                  {
+                    (list.back().second)->clearSolver();
+                    //isInitialized.back() = false;
+                  }
+                  if ( (model_number-1 > 0) )
+                  {
+                    (list.rbegin()[1].second)->clearSolver();
+                    //isInitialized.rbegin()[1] = false;
+                  }
+                } 
               } else if (list.back().second->forwardFinished() == false && list.size() == 1)
               {
                 if (isInitialized.back() == false)
@@ -327,7 +377,7 @@ namespace Dune {
                 list.back().second->stepForward(timestep);
                 // ERT data can be deleted after measurements, as they are not needed anymore
                 bool isERT = (list.back().first.find("ERT") == 0);
-                if (isERT && (traits.basePotentialEvaluation==false)) // moments ERT need ERT base data!
+                if (isERT)
                   list.back().second->clearStorage();
               }
             }

@@ -80,7 +80,7 @@ namespace Dune {
             p0gfs(equationTraits.gfs().gridView(),p0fem),
             ertMatrixContainer(ertMatrixContainer_)
         {
-          if (parameters.model_number==0)
+          if (parameters.model_number==0 && parameters.k == 0)
           {
             std::shared_ptr<LS> ls_ptr(new LS(equationTraits.gfs(),5000,1,true,true)); // max_iter, verbose, reuse, superLU
             (*ertMatrixContainer).set_ls_moments_ERT(ls_ptr);
@@ -97,14 +97,14 @@ namespace Dune {
 
             go.residual(solution, residual);
             // only re-evaluate matrix for the first ERT model
-            if (parameters.model_number==0)
-            {
-              m = 0.;
-              go.jacobian(solution,m);
-              (*ertMatrixContainer).set_matrix_moments_ERT(m);
-            } else {
-              m = (*ertMatrixContainer).read_matrix_moments_ERT();
-            }
+            //if (parameters.model_number==0)
+            //{
+            //  m = 0.;
+            //  go.jacobian(solution,m);
+            //  (*ertMatrixContainer).set_matrix_moments_ERT(m);
+            //} else {
+            m = (*ertMatrixContainer).read_matrix_ERT();
+            //}
             GridVector z(equationTraits.gfs(),0.);
             (*(*ertMatrixContainer).read_ls_moments_ERT()).apply(m,z,residual,1e-12);   // check if pointer is valid!
             solution -= z;

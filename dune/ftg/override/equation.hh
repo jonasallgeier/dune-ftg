@@ -49,6 +49,8 @@ namespace Dune {
 
 
         virtual void clearStorage() = 0;
+        virtual void clearSolver() = 0;
+        virtual void setupSolver() = 0;
 
         /**
          * @brief Return whether equation is solved
@@ -145,6 +147,8 @@ namespace Dune {
           GridVector oldSolution, newSolution;
           C cg;
 
+          bool solverReady = false; 
+
           std::shared_ptr<Solver<Traits,ModelType,DirectionType> >          solver;
           std::shared_ptr<SolutionStorage<Traits,ModelType,DirectionType> > storage;
           //std::shared_ptr<Measurements>                                     measurements;
@@ -164,10 +168,14 @@ namespace Dune {
             stepTimer(false), printTimer(false)
         {
           parameters.setStorage(storage);
-
-          
-          time = 1.;
-          endTime = 2.;
+          startTime = traits.config().template get<RF>("time.start");
+          endTime   = traits.config().template get<RF>("time.end");
+          minTimestep  = parameters.minTimestep();
+          maxTimestep  = parameters.maxTimestep();
+          time         = startTime;
+          oldTime      = startTime;
+          usedTimestep = 0.;
+            
         }
 
           ~DifferentialEquation()
@@ -180,39 +188,18 @@ namespace Dune {
            */
           void initialize(
               const std::shared_ptr<const ParameterList>& parameterList,
-              //const std::shared_ptr<const MeasurementList>& measurementList,
-              //const std::shared_ptr<Measurements>& measurements_
               const std::shared_ptr<MeasurementList>& measurements_,
               const std::shared_ptr<ERTMatrixContainer>& ertMatrixContainer_
               )
           {
             // set up parameter class
             parameters.setParameterList(parameterList);
-            //parameters.setMeasurementList(measurementList);
             measurements = measurements_;
             ertMatrixContainer = ertMatrixContainer_;
 
             // set up solution vectors
             oldSolution = GridVector(equationTraits.gfs(),0.);
             newSolution = GridVector(equationTraits.gfs(),0.);
-
-            // define time domain
-            if (DirectionType::isAdjoint())
-            {
-              endTime   = traits.config().template get<RF>("time.start");
-              startTime = traits.config().template get<RF>("time.end");
-            }
-            else
-            {
-              startTime = traits.config().template get<RF>("time.start");
-              endTime   = traits.config().template get<RF>("time.end");
-            }
-
-            minTimestep  = parameters.minTimestep();
-            maxTimestep  = parameters.maxTimestep();
-            time         = startTime;
-            oldTime      = startTime;
-            usedTimestep = 0.;
 
             // empty storage
             (*storage).clear();
@@ -225,12 +212,6 @@ namespace Dune {
             Dune::PDELab::interpolate(initial,equationTraits.gfs(),oldSolution);
 
             newSolution = oldSolution;
-
-            // set up solver object
-            solver = std::make_shared<Solver<Traits,ModelType,DirectionType> >
-              (traits,equationTraits,cg,parameters,endTime,ertMatrixContainer);
-
-            printTimers();
           }
 
           /**
@@ -269,6 +250,8 @@ namespace Dune {
            */
           void step(RF timestep)
           {
+            setupSolver();
+
             if (finished())
               DUNE_THROW(Dune::Exception,"equation cannot step when it has finished or wasn't initialized");
 
@@ -277,7 +260,6 @@ namespace Dune {
             std::time (&rawtime);
             auto timechar = std::ctime (&rawtime);
             timechar[std::strlen(timechar)-1] = '\0';
-    
 
             if (traits.rank() == 0)
               std::cout << "[" << timechar << "]: solve " << parameters.name() << " from: " << time << " to: " << time + timestep << std::endl;
@@ -291,7 +273,6 @@ namespace Dune {
             
             if (traits.rank()==0)
               std::cout << "[stepwidth: " << timestep << " substeps: " << subSteps << "]" << std::endl;
-
 
             // accept time step
             oldTime = time;
@@ -309,11 +290,8 @@ namespace Dune {
                 (*storage).storeSolution(oldTime,newSolution);
             }
 
-            (*storage).storeSolution(time,newSolution); // TODO this was changed! this is critical for lasttwocontainer! otherwise messed up second time step
-
+            (*storage).storeSolution(time,newSolution); // this was changed! this is critical for lasttwocontainer! otherwise messed up second time step
             oldSolution = newSolution;
-
-
 
             // only save transport results at ERT measurement times          
             RF current_time = time;
@@ -337,9 +315,22 @@ namespace Dune {
           void clearStorage()
           {
             (*storage).clear();
-            //solver.reset();
-            //newSolution = GridVector(equationTraits.gfs());
-            //oldSolution = GridVector(equationTraits.gfs());
+          }
+          
+          void setupSolver()
+          {
+            if (solverReady == false)
+            {
+              solver = std::make_shared<Solver<Traits,ModelType,DirectionType> >
+                (traits,equationTraits,cg,parameters,endTime,ertMatrixContainer);
+              solverReady = true;
+            }
+          }
+
+          void clearSolver()
+          {
+            solver.reset();
+            solverReady = false;
           }
 
           /**

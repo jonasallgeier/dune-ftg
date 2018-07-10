@@ -261,7 +261,7 @@ class ModelTraits
     // define electrode configuration; it is read in from a file by the constructor of this struct
     struct ElectrodeConfiguration
     {
-        int no_electrodes;          // number of electrodes
+        unsigned int no_electrodes;          // number of electrodes
         std::vector<int> name_elec; // name vector
         std::vector<RF> x_elec;     // vector of x coordinates
         std::vector<RF> y_elec;     // vector of y coordinates
@@ -287,7 +287,7 @@ class ModelTraits
             int tmp_surf;
         
             // read data in lines {#,x,y,z,s} from file via temp to vector 
-            for (int i = 1; i < no_electrodes+1; i++) 
+            for (unsigned int i = 1; i < no_electrodes+1; i++) 
             {
               file_econf >> tmp_name;
               name_elec.push_back(tmp_name);
@@ -418,9 +418,9 @@ class ModelTraits
         M m_moments_ERT;
         M m_moments_c;
 
-        std::shared_ptr<LS_ERT>         ls_ERT;
+        std::shared_ptr<LS_ERT> ls_ERT;
         std::shared_ptr<LS_moments_ERT> ls_moments_ERT;
-        std::shared_ptr<LS_moments_c>   ls_moments_c;
+        std::shared_ptr<LS_moments_c> ls_moments_c;
 
       public:
       ERTMatrixContainer(const ModelTraits& traits_)

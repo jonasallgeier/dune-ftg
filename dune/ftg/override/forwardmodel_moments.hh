@@ -289,19 +289,25 @@ namespace Dune {
                   std::string temp;
 
                   ss >> temp; // get the ERT model number
-                  ss >> temp; // get the moment number k
-                  unsigned int k;
-                  std::stringstream(temp) >> k; 
+                  unsigned int model_number;
+                  std::stringstream(temp) >> model_number;
 
-                  if (k==highest_moment)
+                  if (model_number > 0) // delete all models after usage; except for the ones of electrode 1
                   {
-                    for (unsigned int j = 0; j<=highest_moment;j++)
+                    ss >> temp; // get the moment number k
+                    unsigned int k;
+                    std::stringstream(temp) >> k; 
+
+                    if (k==highest_moment)
                     {
-                      list[i-j].second->clearStorage();
-                      (list[i-j].second).reset();                    
+                      for (unsigned int j = 0; j<=highest_moment;j++)
+                      {
+                        list[i-j].second->clearStorage();
+                        (list[i-j].second).reset();                    
+                      }
+                      list[i-highest_moment-1].second->clearStorage();
+                      (list[i-highest_moment-1].second).reset();
                     }
-                    list[i-highest_moment-1].second->clearStorage();
-                    (list[i-highest_moment-1].second).reset();
                   }
                 }
               //}
