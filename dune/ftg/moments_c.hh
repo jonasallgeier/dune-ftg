@@ -10,7 +10,7 @@
 
 #include<dune/modelling/fluxreconstruction.hh>
 #include<dune/modelling/solutionstorage.hh>
-#include<dune/ftg/override/solvers.hh>
+#include<dune/ftg/override/solvers_moments_c.hh>
 
 namespace Dune {
   namespace Modelling {
@@ -242,11 +242,10 @@ namespace Dune {
 
           using DiscretizationType = Discretization::CellCenteredFiniteVolume;
           template<typename... T>
-            using StationarySolver = StationaryLinearSolver_BCGS_AMG_ILU0<T...>;
-            //using StationarySolver = Solver_Reordered_Grid<T...>;          
+            using StationarySolver = StationarySolverMomentsTransport_BCGS_AMG_ILU0_reuse_matrix<T...>;         
           template<typename... T>
-            using TransientSolver  = ExplicitLinearSolver<T...>;
-          using OneStepScheme = Dune::PDELab::ImplicitEulerParameter<RangeField>;
+            using TransientSolver  = TransientSolverMomentsC<T...>; // dummy implementation
+            using OneStepScheme = Dune::PDELab::ImplicitEulerParameter<RangeField>;
           template<typename... T>
             using FluxReconstruction = RT0Reconstruction<T...>;
           template<typename... T>

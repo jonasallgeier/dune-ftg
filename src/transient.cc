@@ -25,6 +25,7 @@
 #include<dune/ftg/transport.hh>
 #include<dune/ftg/geoelectrics.hh>
 #include<dune/ftg/moments_ERT.hh> // is needed, because it is used in modelTraits
+#include<dune/ftg/moments_c.hh> // is needed, because it is used in modelTraits
 #include<dune/ftg/ftg.hh>
 using namespace Dune::Modelling;
 

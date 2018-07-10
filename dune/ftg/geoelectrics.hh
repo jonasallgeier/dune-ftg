@@ -10,7 +10,7 @@
 
 #include<dune/modelling/fluxreconstruction.hh>
 #include<dune/modelling/solutionstorage.hh>
-#include<dune/ftg/override/solvers.hh>
+#include<dune/ftg/override/solvers_geoelectrics.hh>
 #include<dune/grid/utility/hierarchicsearch.hh>
 
 namespace Dune {
@@ -247,11 +247,10 @@ namespace Dune {
 
           using DiscretizationType = Discretization::CellCenteredFiniteVolume;
           template<typename... T>
-            using StationarySolver = StationaryLinearSolver_CG_AMG_SSOR_reuse_matrix<T...>; // solver is modified for ERT matrix storage
-            //using StationarySolver = StationaryLinearSolver_CG_AMG_SSOR<T...>; // solver is modified for ERT matrix storage
+            using StationarySolver = StationarySolverERT_CG_AMG_SSOR_reuse_matrix<T...>; // solver is modified for ERT matrix storage
           template<typename... T>
-            using TransientSolver  = ImplicitLinearSolver<T...>;
-          using OneStepScheme = Dune::PDELab::ImplicitEulerParameter<RangeField>;
+            using TransientSolver  = TransientSolverERT<T...>; // dummy implementation
+            using OneStepScheme = Dune::PDELab::ImplicitEulerParameter<RangeField>;
           template<typename... T>
             using FluxReconstruction = RT0Reconstruction<T...>;
           template<typename... T>

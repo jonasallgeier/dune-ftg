@@ -10,7 +10,7 @@
 
 #include<dune/modelling/fluxreconstruction.hh>
 #include<dune/modelling/solutionstorage.hh>
-#include<dune/ftg/override/solvers.hh>
+#include<dune/ftg/override/solvers_groundwater.hh>
 
 namespace Dune {
   namespace Modelling {
@@ -329,9 +329,9 @@ namespace Dune {
           using DiscretizationType = Discretization::CellCenteredFiniteVolume;
 
           template<typename... T>
-            using StationarySolver = StationaryLinearSolver_CG_AMG_SSOR<T...>;
+            using StationarySolver = StationarySolverFlow_CG_AMG_SSOR<T...>;
           template<typename... T>
-            using TransientSolver  = ImplicitLinearSolver<T...>;
+            using TransientSolver  = TransientSolverFlow_CG_AMG_SSOR<T...>;
           using OneStepScheme = Dune::PDELab::ImplicitEulerParameter<RangeField>;
           template<typename... T>
             using FluxReconstruction = RT0Reconstruction<T...>;

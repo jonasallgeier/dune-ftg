@@ -387,12 +387,10 @@ class ModelTraits
         using GFS        = typename Dune::Modelling::EquationTraits<ModelTraits,ModelTypes::Geoelectrics>::GridFunctionSpace;
         using GridVector = typename Dune::Modelling::EquationTraits<ModelTraits,ModelTypes::Geoelectrics>::GridVector;
         using C          = typename GFS::template ConstraintsContainer<RF>::Type;
-
-        using LOP = Dune::Modelling::SpatialOperator<ModelTraits,ModelTypes::Geoelectrics,DiscType>;
-
-        using MBE = Dune::PDELab::istl::BCRSMatrixBackend<>;
-        using GO  = Dune::PDELab::GridOperator<GFS,GFS,LOP,MBE,DF,RF,RF,C,C>;
-        using M   = typename GO::template MatrixContainer<RF>::Type;
+        using LOP        = Dune::Modelling::SpatialOperator<ModelTraits,ModelTypes::Geoelectrics,DiscType>;
+        using MBE        = Dune::PDELab::istl::BCRSMatrixBackend<>;
+        using GO         = Dune::PDELab::GridOperator<GFS,GFS,LOP,MBE,DF,RF,RF,C,C>;
+        using M          = typename GO::template MatrixContainer<RF>::Type;
         using LS_ERT     = Dune::PDELab::ISTLBackend_CG_AMG_SSOR<GO>;
 
 
@@ -400,18 +398,29 @@ class ModelTraits
         using GFS_moments        = typename Dune::Modelling::EquationTraits<ModelTraits,ModelTypes::Moments_ERT>::GridFunctionSpace;
         using GridVector_moments = typename Dune::Modelling::EquationTraits<ModelTraits,ModelTypes::Moments_ERT>::GridVector;
         using C_moments          = typename GFS::template ConstraintsContainer<RF>::Type;
-
-        using LOP_moments = Dune::Modelling::SpatialOperator<ModelTraits,ModelTypes::Moments_ERT,DiscType_moments>;
-
-        using MBE_moments = Dune::PDELab::istl::BCRSMatrixBackend<>;
-        using GO_moments  = Dune::PDELab::GridOperator<GFS_moments,GFS_moments,LOP_moments,MBE_moments,DF,RF,RF,C_moments,C_moments>;
-        using LS_moments = Dune::PDELab::ISTLBackend_BCGS_AMG_ILU0<GO_moments>;
+        using LOP_moments        = Dune::Modelling::SpatialOperator<ModelTraits,ModelTypes::Moments_ERT,DiscType_moments>;
+        using MBE_moments        = Dune::PDELab::istl::BCRSMatrixBackend<>;
+        using GO_moments         = Dune::PDELab::GridOperator<GFS_moments,GFS_moments,LOP_moments,MBE_moments,DF,RF,RF,C_moments,C_moments>;
+        using LS_moments_ERT     = Dune::PDELab::ISTLBackend_CG_AMG_SSOR<GO_moments>;
         
-        M m_ERT;
-        M m_moments;
+        using DiscType_moments_c   = typename Dune::Modelling::EquationTraits<ModelTraits,ModelTypes::Moments_c>::DiscretizationType;
+        using GFS_moments_c        = typename Dune::Modelling::EquationTraits<ModelTraits,ModelTypes::Moments_c>::GridFunctionSpace;
+        using GridVector_moments_c = typename Dune::Modelling::EquationTraits<ModelTraits,ModelTypes::Moments_c>::GridVector;
+        using C_moments_c          = typename GFS::template ConstraintsContainer<RF>::Type;
+        using LOP_moments_c        = Dune::Modelling::SpatialOperator<ModelTraits,ModelTypes::Moments_c,DiscType_moments_c>;
+        using MBE_moments_c        = Dune::PDELab::istl::BCRSMatrixBackend<>;
+        using GO_moments_c         = Dune::PDELab::GridOperator<GFS_moments_c,GFS_moments_c,LOP_moments_c,MBE_moments_c,DF,RF,RF,C_moments_c,C_moments_c>;
+        using LS_moments_c         = Dune::PDELab::ISTLBackend_BCGS_AMG_ILU0<GO_moments_c>;
 
-        std::shared_ptr<LS_ERT> ls_ERT;
-        std::shared_ptr<LS_moments> ls_moments;
+
+
+        M m_ERT;
+        M m_moments_ERT;
+        M m_moments_c;
+
+        std::shared_ptr<LS_ERT>         ls_ERT;
+        std::shared_ptr<LS_moments_ERT> ls_moments_ERT;
+        std::shared_ptr<LS_moments_c>   ls_moments_c;
 
       public:
       ERTMatrixContainer(const ModelTraits& traits_)
@@ -434,21 +443,39 @@ class ModelTraits
         {
           return ls_ERT;
         }
-        void set_matrix_moments(M m_in)
+
+        void set_matrix_moments_ERT(M m_in)
         {
-          m_moments = m_in;
+          m_moments_ERT = m_in;
         }
-        M read_matrix_moments()
+        M read_matrix_moments_ERT()
         {
-          return m_moments;
+          return m_moments_ERT;
         }
-        void set_ls_moments(std::shared_ptr<LS_moments> ls_in)
+        void set_ls_moments_ERT(std::shared_ptr<LS_moments_ERT> ls_in)
         {
-          ls_moments = ls_in;
+          ls_moments_ERT = ls_in;
         }
-        std::shared_ptr<LS_moments> read_ls_moments()
+        std::shared_ptr<LS_moments_ERT> read_ls_moments_ERT()
         {
-          return ls_moments;
+          return ls_moments_ERT;
+        }
+
+        void set_matrix_moments_c(M m_in)
+        {
+          m_moments_c = m_in;
+        }
+        M read_matrix_moments_c()
+        {
+          return m_moments_c;
+        }
+        void set_ls_moments_c(std::shared_ptr<LS_moments_c> ls_in)
+        {
+          ls_moments_c = ls_in;
+        }
+        std::shared_ptr<LS_moments_c> read_ls_moments_c()
+        {
+          return ls_moments_c;
         }
     };
 
