@@ -360,7 +360,7 @@ namespace Dune {
                     (list.back().second)->clearSolver();
                     //isInitialized.back() = false;
                   }
-                  if ( (model_number-1 > 0) )
+                  if ( (model_number > 1) )
                   {
                     (list.rbegin()[1].second)->clearSolver();
                     //isInitialized.rbegin()[1] = false;

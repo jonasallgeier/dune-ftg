@@ -39,6 +39,8 @@ namespace Dune {
           using P0GFS = Dune::PDELab::GridFunctionSpace<typename Traits::GridTraits::GridView,P0FEM,P0CON,P0VBE>;
           using P0C   = typename P0GFS::template ConstraintsContainer<RF>::Type;
           using LS    = Dune::PDELab::ISTLBackend_BCGS_AMG_ILU0<GO>; // ISTLBackend_BCGS_AMG_ILU0/ISTLBackend_CG_AMG_SSOR
+          //using LS = Dune::PDELab::ISTLBackend_OVLP_GMRES_ILU0<GFS,C>;
+          //using LS = Dune::PDELab::ISTLBackend_OVLP_BCGS_ILUn<GFS,C>;
 
           const EquationTraits<Traits,ModelType,DirectionType>& equationTraits;
 
@@ -52,11 +54,12 @@ namespace Dune {
           P0FEM p0fem;
           P0GFS p0gfs;
           P0C   p0cg;
-          //LS    ls;
 
           std::shared_ptr<LS> ls_ptr;
           using ERTMatrixContainer = typename Traits::ERTMatrixContainer;
           std::shared_ptr<ERTMatrixContainer> ertMatrixContainer;
+
+          C c;
 
         public:
 
@@ -74,11 +77,13 @@ namespace Dune {
             go(equationTraits.gfs(),cg,equationTraits.gfs(),cg,lop,mbe), m(go),
             p0fem(Dune::GeometryType(Dune::GeometryType::cube,Traits::GridTraits::dim)),
             p0gfs(equationTraits.gfs().gridView(),p0fem),
-            ertMatrixContainer(ertMatrixContainer_)
+            ertMatrixContainer(ertMatrixContainer_), c(cg)
         {
           if (parameters.model_number==0) // zeroth moment model
           {
             std::shared_ptr<LS> ls_ptr(new LS(equationTraits.gfs(),5000,1,true,true)); // max_iter, verbose, reuse, superLU
+            //std::shared_ptr<LS> ls_ptr(new LS(equationTraits.gfs(),c,5000,3)); // max_iter, verbose, reuse, superLU
+            //std::shared_ptr<LS> ls_ptr(new LS(equationTraits.gfs(),c,1,5000,3)); // max_iter, verbose, reuse, superLU
             (*ertMatrixContainer).set_ls_moments_c(ls_ptr);
           }
         }
