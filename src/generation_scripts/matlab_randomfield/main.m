@@ -11,7 +11,7 @@ cm.outputtrunk = 'output/intermediate'; % all field files have this trunk in fro
 cm.input = './input'; % all field files have this trunk in front of their name; it is not recommended to leave this empty
 
 cm.fieldgenerator_location = '../../../../../release-build/dune-randomfield/src/fieldgenerator';
-cm.vtk_out = true;
+cm.vtk_out = false;
 
 cm.isequidistant = false;
 cm.seed = 42; % this is a matlab rng seed, which will later deliver different pseudo random reproducible seeds for dune-randomfield
