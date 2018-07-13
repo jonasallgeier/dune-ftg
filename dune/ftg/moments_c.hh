@@ -336,15 +336,16 @@ namespace Dune {
               auto temp = well_cells.find(current_index);
 
               if ( !(temp->first == well_cells.end()->first) ) 
-              {  
-                if ( (temp->second).first <0) // an extraction well cell
+              {
+                RF rate = (temp->second).first;
+                if ( rate < 0.0) // an extraction well cell
                 {
-                  return (temp->second).first*value; // rate multiplied with concentration
+                  return rate*value; // rate multiplied with concentration
                 } 
                 else if ( (temp->second).second == true) // a tracer injection cell
                 {
                   RF m_in = c_in * pow(t_in,(kth+1)) / (kth+1);
-                  return (temp->second).first*m_in; // rate multiplied with concentration
+                  return rate*m_in; // rate multiplied with concentration
                 }
               }
               // if we end up here, this cell is neither source nor sink
@@ -435,7 +436,8 @@ namespace Dune {
           {
             // contribution from source term
             const Domain& cellCenterLocal = referenceElement(eg.geometry()).position(0,0);
-            RF source_term_contribution = -sourceTerm.q(eg.entity(),cellCenterLocal,x(lfsu,0),time);
+
+            RF source_term_contribution = -sourceTerm.q(eg.entity(),cellCenterLocal,x(lfsu,0),time)/parameters.porosity(cellCenterLocal);
             RF moment_contribution;
             if (kth==0)
             {

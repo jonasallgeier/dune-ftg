@@ -311,15 +311,26 @@ namespace Dune {
               unsigned int current_index = lgv.indexSet().index(elem);
               auto temp = well_cells.find(current_index);
 
-              if ( !(temp->first == well_cells.end()->first) ) 
+              if ( !(temp->first == well_cells.end()->first) ) //  current cell is a well cell 
               {  
-                if ( (temp->second).first <0) // an extraction well cell
+                RF rate = (temp->second).first;
+                
+                if ( rate < 0.0) // an extraction well cell
                 {
-                  return (temp->second).first*value; // rate multiplied with concentration
+                  /*
+                  for ( const auto & is : intersections(lgv,elem))
+                  {
+                    if (is.neighbor()) 
+                    {
+                      std::cout << "this is an extraction well not at a boundary" << std::endl; 
+                    }
+                  }
+                  */
+                  return rate*value; // rate multiplied with concentration
                 } 
                 else if ( (temp->second).second == true && t <= t_in) // a tracer injection cell
                 {
-                  return (temp->second).first*c_in; // rate multiplied with concentration
+                  return rate*c_in; // rate multiplied with concentration
                 }
               }
               // if we end up here, this cell is neither a concentration source nor sink
@@ -407,7 +418,8 @@ namespace Dune {
           {
             // contribution from source term
             const Domain& cellCenterLocal = referenceElement(eg.geometry()).position(0,0);
-            r.accumulate(lfsv,0,-sourceTerm.q(eg.entity(),cellCenterLocal,x(lfsu,0),time));
+            auto value = x(lfsu,0);
+            r.accumulate(lfsv,0,-sourceTerm.q(eg.entity(),cellCenterLocal,value,time)/parameters.porosity(cellCenterLocal));
           }
 
         /**
