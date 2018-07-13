@@ -23,7 +23,7 @@
 
 using namespace Dune::Modelling;
 
-void moments(int argc, char** argv)
+void moments(int argc, char** argv,std::string inifile_name)
 {
   Dune::Timer totalTimer;
   totalTimer.start();
@@ -34,7 +34,7 @@ void moments(int argc, char** argv)
   // read in configuration from .ini file
   Dune::ParameterTree config;
   Dune::ParameterTreeParser parser;
-  parser.readINITree("modelling.ini",config);
+  parser.readINITree(inifile_name,config);
 
   // use double for coordinates and values, dim = 3;
   using ModelTraits = ModelTraits<double,double,3>;
@@ -116,16 +116,39 @@ void moments(int argc, char** argv)
     std::cout << "Total time elapsed: " << totalTimer.elapsed() << std::endl;
 }
 
+void show_help()
+{
+  std::cout << "Possible options: \n"
+        << "      (no option)         -> run moment generating model with modelling.ini file\n"
+        << "      afilename.ini       -> run moment generating model, but with user-specified .ini-file\n"
+        << std::endl;
+}
+
 int main(int argc, char** argv)
 {
   try
   {
+    std::string inifile = "modelling.ini";
     if (argc==1)
-      moments(argc,argv); // try to run the problem
+      moments(argc,argv,inifile); // try to run the problem
+    else if (argc==2)
+    {
+      if ((std::string(argv[1]) == "--help") || (std::string(argv[1]) == "-help") || (std::string(argv[1]) == "help"))
+      {
+        show_help();
+        return 0;
+      }
+      else
+      {
+        inifile = std::string(argv[1]);
+        moments(argc,argv,inifile); // try to run the problem
+      }
+    }    
     else
-      std::cout << "Possible options: \n"
-      << "      (no option) -> run moment model\n"
-      << std::endl;
+    {
+      show_help();
+      return 0;
+    }
     return 0;
   }
   catch (Dune::Exception &e)

@@ -29,7 +29,7 @@
 #include<dune/ftg/ftg.hh>
 using namespace Dune::Modelling;
 
-void transient(int argc, char** argv, bool evaluateBasePotentials)
+void transient(int argc, char** argv, bool evaluateBasePotentials,std::string inifile_name)
 {
   Dune::Timer totalTimer;
   totalTimer.start();
@@ -40,7 +40,7 @@ void transient(int argc, char** argv, bool evaluateBasePotentials)
   // read in configuration from .ini file
   Dune::ParameterTree config;
   Dune::ParameterTreeParser parser;
-  parser.readINITree("modelling.ini",config);
+  parser.readINITree(inifile_name,config);
    
   // use double for coordinates and values, dim = 3;
   using ModelTraits = ModelTraits<double,double,3>;
@@ -110,19 +110,64 @@ void transient(int argc, char** argv, bool evaluateBasePotentials)
     std::cout << "Total time elapsed: " << totalTimer.elapsed() << std::endl;
 }
 
+void show_help()
+{
+  std::cout << "Possible options: \n"
+        << "      (no option)         -> run transient model with base potential and modelling.ini file\n"
+        << "      --onlybasepotential -> run transient model, but only the electrical base potential will be evaluated\n"
+        << "      --nobasepotential   -> run transient model, but without the electrical base potential\n"
+        << "      afilename.ini       -> run transient model, but with user-specified .ini-file\n"
+        << std::endl;
+}
+
 int main(int argc, char** argv)
 {
   try
   {
-    if (argc==1)
-      transient(argc,argv,false); // run the problem, no base potential evaluation
-    else if (std::string(argv[1]) == "--basepotential")
-      transient(argc,argv,true); // run the problem with base potential evaluation
+    bool onlybase = false;
+    bool nobase = false;
+    std::string inifile = "modelling.ini";
+
+    for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) == "--onlybasepotential")
+        {
+          onlybase = true;
+        } else if (std::string(argv[i]) == "--nobasepotential")
+        {
+          nobase = true;
+        } else if ((std::string(argv[i]) == "--help") || (std::string(argv[i]) == "-help") || (std::string(argv[i]) == "help"))
+        {
+          show_help();
+          return 0;
+        }  
+        else
+        {
+          inifile = std::string(argv[i]);
+        }
+    }
+    std::cout << "Will use this .ini-file: " << inifile << std::endl;
+
+    if ((onlybase==false) && (nobase==false)) // run the problem, with base potential evaluation using standard modelling.ini file
+    {
+      transient(argc,argv,false,inifile); 
+      std::cout << "                             " << std::endl;
+      std::cout << "-----------------------------" << std::endl; 
+      std::cout << "Evaluation of base potential." << std::endl; 
+      std::cout << "-----------------------------" << std::endl; 
+      std::cout << "                             " << std::endl; 
+      transient(argc,argv,true,inifile);
+    }
+    else if ((onlybase==true) && (nobase==true))
+      std::cout << "--nobasepotential and --onlybasepotential cannot be used together" << std::endl;
+    else if (onlybase) // run only base potential evaluation
+      transient(argc,argv,true,inifile); 
+    else if (nobase) // run, without base potential evaluation
+      transient(argc,argv,false,inifile);
     else
-      std::cout << "Possible options: \n"
-      << "      (no option) -> run transient model\n"
-      << "      --basepotential -> run transient model, but only the electrical base potential will be evaluated\n"
-      << std::endl;
+    {
+      show_help();
+      return 0;
+    }
     return 0;
   }
   catch (Dune::Exception &e)
