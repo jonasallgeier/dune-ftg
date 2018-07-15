@@ -81,7 +81,7 @@ namespace Dune {
         {
           if (parameters.model_number==0) // zeroth moment model
           {
-            std::shared_ptr<LS> ls_ptr(new LS(equationTraits.gfs(),5000,1,true,true)); // max_iter, verbose, reuse, superLU
+            std::shared_ptr<LS> ls_ptr(new LS(equationTraits.gfs(),5000,3,true,true)); // max_iter, verbose, reuse, superLU
             //std::shared_ptr<LS> ls_ptr(new LS(equationTraits.gfs(),c,5000,3)); // max_iter, verbose, reuse, superLU
             //std::shared_ptr<LS> ls_ptr(new LS(equationTraits.gfs(),c,1,5000,3)); // max_iter, verbose, reuse, superLU
             (*ertMatrixContainer).set_ls_moments_c(ls_ptr);
