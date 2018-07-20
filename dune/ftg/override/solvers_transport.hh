@@ -87,8 +87,8 @@ namespace Dune {
           using P0CON = Dune::PDELab::P0ParallelConstraints;
           using P0GFS = Dune::PDELab::GridFunctionSpace<typename Traits::GridTraits::GridView,P0FEM,P0CON,P0VBE>;
           using P0C   = typename P0GFS::template ConstraintsContainer<RF>::Type;
-          using LS    = Dune::PDELab::ISTLBackend_CG_AMG_SSOR<IGO>;
-          //using LS    = Dune::PDELab::ISTLBackend_BCGS_AMG_ILU0<IGO>;
+          //using LS    = Dune::PDELab::ISTLBackend_CG_AMG_SSOR<IGO>;
+          using LS    = Dune::PDELab::ISTLBackend_BCGS_AMG_ILU0<IGO>;
 
           using PDESolver = Dune::PDELab::StationaryLinearProblemSolver<IGO,LS,GridVector>;
           using OSM       = Dune::PDELab::OneStepMethod<RF,IGO,PDESolver,GridVector,GridVector>;

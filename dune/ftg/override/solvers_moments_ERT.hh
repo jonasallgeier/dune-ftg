@@ -106,7 +106,7 @@ namespace Dune {
             m = (*ertMatrixContainer).read_matrix_ERT();
             //}
             GridVector z(equationTraits.gfs(),0.);
-            (*(*ertMatrixContainer).read_ls_moments_ERT()).apply(m,z,residual,1e-12);   // check if pointer is valid!
+            (*(*ertMatrixContainer).read_ls_moments_ERT()).apply(m,z,residual,1e-20);   // check if pointer is valid!
             solution -= z;
 
             return 1;

@@ -219,11 +219,11 @@ namespace Dune {
             using StationarySolver = StationarySolverTransport<T...>; // dummy implementation
           template<typename... T>
             //using TransientSolver  = TransientSolverTransport_Explicit<T...>;
-            //using TransientSolver  = TransientSolverTransport_Implicit<T...>;
-            using TransientSolver  = TransientSolverTransport_CrankNicolson<T...>;
+            using TransientSolver  = TransientSolverTransport_Implicit<T...>;
+            //using TransientSolver  = TransientSolverTransport_CrankNicolson<T...>;
             //using OneStepScheme = Dune::PDELab::ExplicitEulerParameter<RangeField>;
-            //using OneStepScheme = Dune::PDELab::ImplicitEulerParameter<RangeField>;
-            using OneStepScheme = Dune::PDELab::OneStepThetaParameter<RangeField>;
+            using OneStepScheme = Dune::PDELab::ImplicitEulerParameter<RangeField>;
+            //using OneStepScheme = Dune::PDELab::OneStepThetaParameter<RangeField>;
           template<typename... T>
             using FluxReconstruction = RT0Reconstruction<T...>;
           template<typename... T>
