@@ -299,7 +299,7 @@ namespace Dune {
             bool isTransport        = (parameters.name().find("soluteTransport") == 0);
 
             // print solution if selected
-            if (traits.config().template get<bool>("output.writeVTK",false) || (isTransport && timeforTransport && traits.config().template get<bool>("writeVTK_transport_at_ERT_times",false)))
+            if (traits.config().template get<bool>("output.writeVTK",false) || (isTransport && timeforTransport && traits.config().template get<bool>("writeVTK_transport_for_ERT_times",false)))
             {
               printTimer.start();
               

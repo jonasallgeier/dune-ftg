@@ -31,6 +31,9 @@ void moments(int argc, char** argv,std::string inifile_name)
   // initialize MPI if available
   Dune::MPIHelper& helper = Dune::MPIHelper::instance(argc, argv);
 
+  if (helper.rank() == 0)  
+      std::cout << "Will use this .ini-file: " << inifile_name << std::endl;  
+  
   // read in configuration from .ini file
   Dune::ParameterTree config;
   Dune::ParameterTreeParser parser;

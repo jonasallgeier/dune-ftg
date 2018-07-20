@@ -36,7 +36,19 @@ void transient(int argc, char** argv, bool evaluateBasePotentials,std::string in
 
   // initialize MPI if available
   Dune::MPIHelper& helper = Dune::MPIHelper::instance(argc, argv);
-
+  
+  if (helper.rank() == 0)
+  {
+    if (evaluateBasePotentials)
+    {
+      std::cout << "                             " << std::endl;
+      std::cout << "-----------------------------" << std::endl; 
+      std::cout << "Evaluation of base potential." << std::endl; 
+      std::cout << "-----------------------------" << std::endl; 
+      std::cout << "                             " << std::endl; 
+    }
+    std::cout << "Will use this .ini-file: " << inifile_name << std::endl;
+  }
   // read in configuration from .ini file
   Dune::ParameterTree config;
   Dune::ParameterTreeParser parser;
@@ -145,16 +157,10 @@ int main(int argc, char** argv)
           inifile = std::string(argv[i]);
         }
     }
-    std::cout << "Will use this .ini-file: " << inifile << std::endl;
 
     if ((onlybase==false) && (nobase==false)) // run the problem, with base potential evaluation using standard modelling.ini file
     {
       transient(argc,argv,false,inifile); 
-      std::cout << "                             " << std::endl;
-      std::cout << "-----------------------------" << std::endl; 
-      std::cout << "Evaluation of base potential." << std::endl; 
-      std::cout << "-----------------------------" << std::endl; 
-      std::cout << "                             " << std::endl; 
       transient(argc,argv,true,inifile);
     }
     else if ((onlybase==true) && (nobase==true))

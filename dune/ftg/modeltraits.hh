@@ -692,7 +692,7 @@ class ModelTraits
             std::map<unsigned int, RF> current_output;
             unsigned int no_electrodes = extraction_helper<Storage>(current_output,storage,time); // get the results of this model
             
-            std::string filenamebase = traits.config().template get<std::string>("output.writeTransportFilename","resultsTransport");
+            std::string filenamebase = traits.config().template get<std::string>("output.writeTransport_at_electrodes_for_ERT_times","resultsTransport");
             if (traits.rank() == 0)
             {
               std::cout << "printing concentration results" << std::endl;
@@ -729,7 +729,7 @@ class ModelTraits
 
 
             // print complete concentration field to ASCII file
-            if (traits.config().template get<bool>("output.writeVTK_transport_at_ERT_times",false))
+            if (traits.config().template get<bool>("output.writeTransport_whole_field_for_ERT_times",false))
             {
               std::map<std::pair<RF, RF>, std::map<RF, RF> > output_concentrations_field; // <x,y> <z,value> 
               const typename GridTraits::Domain x = {0.5, 0.5, 0.5}; // get value at cell center

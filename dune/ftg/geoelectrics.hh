@@ -131,7 +131,7 @@ namespace Dune {
           RF cond (const Element& elem, const Domain& x, const Time& time) const
           {
             // read constant kappa from file; if not there try looking for field
-            typename Traits::GridTraits::Scalar kappa = -5.0; // TODO there must be a better way to do this! actually: there is not...
+            typename Traits::GridTraits::Scalar kappa = -5.0; // there must be a better way to do this! actually: there is not...
             kappa = traits.config().template get<RF>("parameters.kappa",kappa);
             if (kappa == -5.0)
             {
@@ -155,9 +155,11 @@ namespace Dune {
             if (traits.basePotentialEvaluation)
               return sigma_bg[0];
 
-            // if there are negative concentration even though there should be none -> set to sigma_bg
+            // evaluate electrical conductivity
             RF el_cond = (*transportParams).concentration(elem,x,time)*kappa[0]+sigma_bg[0];
-            return (el_cond < sigma_bg[0] ? sigma_bg[0] : el_cond);
+
+            // apply stabilization: set values below 0.5*sigma_bg -> 0.5*sigma_bg 
+            return (el_cond < 0.5*sigma_bg[0] ? 0.5*sigma_bg[0] : el_cond);
           }
 
         /**

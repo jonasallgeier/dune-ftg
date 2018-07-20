@@ -205,25 +205,26 @@ void unify_ERT_results(auto modelTraits)
       infile.close();
       remove(infilename.c_str());
       
-      std::ofstream outfile;
-      std::string outfilename = filenamebase;
-
-      if (modelTraits->basePotentialEvaluation)
-      {
-        outfilename += (".data");
-      } else
-      {
-        outfilename += ("_" + timeString + ".data");
-      }
-
-      outfile.open(outfilename, std::ios::out | std::ios::trunc);
-      outfile << "injected_el measured_el potential" << std::endl;
-      for (auto const & current_entry : complete_map)
-      {
-        outfile << current_entry.first.first << " " << current_entry.first.second << " " << current_entry.second << std::endl;
-      }
-      outfile.close();
     }
+    
+    std::ofstream outfile;
+    std::string outfilename = filenamebase;
+
+    if (modelTraits->basePotentialEvaluation)
+    {
+      outfilename += (".data");
+    } else
+    {
+      outfilename += ("_" + timeString + ".data");
+    }
+
+    outfile << "injected_el measured_el potential" << std::endl;
+    outfile.open(outfilename, std::ios::out | std::ios::trunc);
+    for (auto const & current_entry : complete_map)
+    {
+      outfile << current_entry.first.first << " " << current_entry.first.second << " " << current_entry.second << std::endl;
+    }
+    outfile.close();
   }
 }
 
@@ -272,22 +273,22 @@ void unify_transport_results(auto modelTraits)
         RF concentration;
         infile >> electrode;
         infile >> concentration;
-        complete_map.insert(std::pair<unsigned int, RF>(electrode, concentration));
+        if ( (electrode >= 1) && (electrode <= no_electrodes) )
+          complete_map.insert(std::pair<unsigned int, RF>(electrode, concentration));
       }
       infile.close();
       remove(infilename.c_str());
-      
-      std::ofstream outfile;
-      std::string outfilename = filenamebase + "_" + timeString + ".data";
-      outfile.open(outfilename, std::ios::out | std::ios::trunc);
-
-      outfile << "electrode concentration" << std::endl;
-      for (auto const & current_entry : complete_map)
-      {
-        outfile << current_entry.first << " " << current_entry.second << std::endl;
-      }
-      outfile.close();
     }
+    std::ofstream outfile;
+    std::string outfilename = filenamebase + "_" + timeString + ".data";
+    outfile.open(outfilename, std::ios::out | std::ios::trunc);
+
+    outfile << "electrode concentration" << std::endl;
+    for (auto const & current_entry : complete_map)
+    {
+      outfile << current_entry.first << " " << current_entry.second << std::endl;
+    }
+    outfile.close();
   }
 }
 
@@ -335,22 +336,22 @@ void unify_momentsTransport_results(auto modelTraits)
         RF momentTransport;
         infile >> electrode;
         infile >> momentTransport;
-        complete_map.insert(std::pair<unsigned int, RF>(electrode, momentTransport));
+        if ( (electrode >= 1) && (electrode <= no_electrodes) ) 
+          complete_map.insert(std::pair<unsigned int, RF>(electrode, momentTransport));
       }
       infile.close();
       remove(infilename.c_str());
-      
-      std::ofstream outfile;
-      std::string outfilename = filenamebase + "_" + momentString + ".data";
-      outfile.open(outfilename, std::ios::out | std::ios::trunc);
-
-      outfile << "electrode momentTransport" << std::endl;
-      for (auto const & current_entry : complete_map)
-      {
-        outfile << current_entry.first << " " << current_entry.second << std::endl;
-      }
-      outfile.close();
     }
+    std::ofstream outfile;
+    std::string outfilename = filenamebase + "_" + momentString + ".data";
+    outfile.open(outfilename, std::ios::out | std::ios::trunc);
+
+    outfile << "electrode momentTransport" << std::endl;
+    for (auto const & current_entry : complete_map)
+    {
+      outfile << current_entry.first << " " << current_entry.second << std::endl;
+    }
+    outfile.close();
   }
 }
 
@@ -413,19 +414,18 @@ void unify_momentsERT_results(auto modelTraits)
       }
       infile.close();
       remove(infilename.c_str());
-      
-      std::ofstream outfile;
-      std::string outfilename = filenamebase;
-
-      outfilename += ("_" + momentString + ".data");
-      outfile.open(outfilename, std::ios::out | std::ios::trunc);
-      outfile << "injected_el measured_el potential" << std::endl;
-      for (auto const & current_entry : complete_map)
-      {
-        outfile << current_entry.first.first << " " << current_entry.first.second << " " << current_entry.second << std::endl;
-      }
-      outfile.close();
     }
+    std::ofstream outfile;
+    std::string outfilename = filenamebase;
+
+    outfilename += ("_" + momentString + ".data");
+    outfile.open(outfilename, std::ios::out | std::ios::trunc);
+    outfile << "injected_el measured_el potential" << std::endl;
+    for (auto const & current_entry : complete_map)
+    {
+      outfile << current_entry.first.first << " " << current_entry.first.second << " " << current_entry.second << std::endl;
+    }
+    outfile.close();
   }
 }
 
