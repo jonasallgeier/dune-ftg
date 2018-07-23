@@ -197,14 +197,15 @@ void unify_ERT_results(auto modelTraits)
         infile >> measured_electrode;
         infile >> potential;
 
-        std::pair<unsigned int, unsigned int> key;
-        key = std::make_pair(injection_electrode,measured_electrode);
-
-        complete_map.insert(std::pair<std::pair<unsigned int, unsigned int>, RF >(key, potential));
+        if ( (injection_electrode >= 1) && (injection_electrode <= no_electrodes) && (measured_electrode >= 1) && (measured_electrode <= no_electrodes) )
+        {
+          std::pair<unsigned int, unsigned int> key;
+          key = std::make_pair(injection_electrode,measured_electrode);
+          complete_map.insert(std::pair<std::pair<unsigned int, unsigned int>, RF >(key, potential));
+        }
       }
       infile.close();
       remove(infilename.c_str());
-      
     }
     
     std::ofstream outfile;
@@ -218,8 +219,8 @@ void unify_ERT_results(auto modelTraits)
       outfilename += ("_" + timeString + ".data");
     }
 
-    outfile << "injected_el measured_el potential" << std::endl;
     outfile.open(outfilename, std::ios::out | std::ios::trunc);
+    outfile << "injected_el measured_el potential" << std::endl;
     for (auto const & current_entry : complete_map)
     {
       outfile << current_entry.first.first << " " << current_entry.first.second << " " << current_entry.second << std::endl;

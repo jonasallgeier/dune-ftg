@@ -54,19 +54,24 @@ void moments(int argc, char** argv,std::string inifile_name)
   using GeoelectricsModel = ForwardModel<ModelTraits,ModelTypes::Geoelectrics,Formulation::Stationary>;
   using Moments_ERT_Model = ForwardModel<ModelTraits,ModelTypes::Moments_ERT,Formulation::Stationary>;
 
-  forwardModelList.add<GroundwaterModel>("groundwaterFlow");
+  if (config.template get<bool>("models.flow"))
+    forwardModelList.add<GroundwaterModel>("groundwaterFlow");
+  
   for (unsigned int i = 0; i <= highest_moment; i++)
   {
-    std::string model_name = "momentsTransport_" + std::to_string(i); // name for the k-th model is momentsTransport_k
-    if (i == 0)
+    if (config.template get<bool>("models.transport"))
     {
-      forwardModelList.add<Moments_c_Model,GroundwaterModel>(model_name,std::list<std::string>{"groundwaterFlow"});
+      std::string model_name = "momentsTransport_" + std::to_string(i); // name for the k-th model is momentsTransport_k
+      if (i == 0)
+      {
+        forwardModelList.add<Moments_c_Model,GroundwaterModel>(model_name,std::list<std::string>{"groundwaterFlow"});
+      }
+      else
+      {
+        std::string model_name_dependency = "momentsTransport_" +  std::to_string(i-1); // the k-th moment depends on k-1
+        forwardModelList.add<Moments_c_Model,GroundwaterModel,Moments_c_Model>(model_name,std::list<std::string>{"groundwaterFlow",model_name_dependency});
+      }
     }
-    else
-    {
-      std::string model_name_dependency = "momentsTransport_" +  std::to_string(i-1); // the k-th moment depends on k-1
-      forwardModelList.add<Moments_c_Model,GroundwaterModel,Moments_c_Model>(model_name,std::list<std::string>{"groundwaterFlow",model_name_dependency});
-    }  
   }
   set_electrodes<ModelTraits>(&modelTraits);
   set_wells<ModelTraits>(&modelTraits);
@@ -74,16 +79,19 @@ void moments(int argc, char** argv,std::string inifile_name)
   // generate N ERT base potential models for N electrodes
   for (unsigned int i = 0; i < modelTraits.electrodeconfiguration.no_electrodes; i++)
   {
-    std::string name = "ERT_" + std::to_string(i); // name for the n-th model is ERT_n
-    forwardModelList.add<GeoelectricsModel>(name); // create a new geoelectrics model
-
-    //generate (k+1)*N ERT moment models for N electrodes and the highest moment k
-    for (unsigned int j = 0; j <= highest_moment; j++)
+    if (config.template get<bool>("models.ERT"))
     {
-      std::string model_name = "momentsERT_" + std::to_string(i) + "_" + std::to_string(j); // example: momentsERT_42_1 -> 1st moment, 42nd electrode
-      std::string c_model_name = "momentsTransport_"    + std::to_string(j);
-      std::string ERT_model_name = "ERT_" + std::to_string(i);
-      forwardModelList.add<Moments_ERT_Model,Moments_c_Model,GeoelectricsModel>(model_name,std::list<std::string>{c_model_name,ERT_model_name});
+      std::string name = "ERT_" + std::to_string(i); // name for the n-th model is ERT_n
+      forwardModelList.add<GeoelectricsModel>(name); // create a new geoelectrics model
+
+      //generate (k+1)*N ERT moment models for N electrodes and the highest moment k
+      for (unsigned int j = 0; j <= highest_moment; j++)
+      {
+        std::string model_name = "momentsERT_" + std::to_string(i) + "_" + std::to_string(j); // example: momentsERT_42_1 -> 1st moment, 42nd electrode
+        std::string c_model_name = "momentsTransport_"    + std::to_string(j);
+        std::string ERT_model_name = "ERT_" + std::to_string(i);
+        forwardModelList.add<Moments_ERT_Model,Moments_c_Model,GeoelectricsModel>(model_name,std::list<std::string>{c_model_name,ERT_model_name});
+      }
     }
   }
 
@@ -105,11 +113,11 @@ void moments(int argc, char** argv,std::string inifile_name)
   // if desired, output is unified from one file/processor to a single file
   if (helper.rank()== 0 && modelTraits.config().template get<bool>("output.unify_parallel_results",false))
   {
-    if (modelTraits.config().template get<bool>("output.writeERT",false))
+    if (config.template get<bool>("models.ERT")       && config.template get<bool>("output.writeERT",false))
       unify_ERT_results<ModelTraits>(&modelTraits);
-    if (modelTraits.config().template get<bool>("output.writeMomentsTransport",false))
+    if (config.template get<bool>("models.transport") && config.template get<bool>("output.writeMomentsTransport",false))
       unify_momentsTransport_results<ModelTraits>(&modelTraits);
-    if (modelTraits.config().template get<bool>("output.writeMomentsERT",false))
+    if (config.template get<bool>("models.ERT")       && config.template get<bool>("output.writeMomentsERT",false))
       unify_momentsERT_results<ModelTraits>(&modelTraits);
   }
 

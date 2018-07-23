@@ -70,24 +70,31 @@ void transient(int argc, char** argv, bool evaluateBasePotentials,std::string in
 
   // insert groundwater and transport model into forward model list
   if (!modelTraits.basePotentialEvaluation)
-  {  
-    forwardModelList.add<GroundwaterModel>("groundwaterFlow");
-    forwardModelList.add<TransportModel,GroundwaterModel>("soluteTransport",std::list<std::string>{"groundwaterFlow"});
+  {
+    if (config.template get<bool>("models.flow"))
+    {
+      forwardModelList.add<GroundwaterModel>("groundwaterFlow");
+      if (config.template get<bool>("models.transport"))
+        forwardModelList.add<TransportModel,GroundwaterModel>("soluteTransport",std::list<std::string>{"groundwaterFlow"});
+    }
   }
 
   // set well & electrode configuration
   set_electrodes<ModelTraits>(&modelTraits);
   set_wells<ModelTraits>(&modelTraits);
   
-  // generate N geoelectrics models for N electrodes
-  std::stringstream temp_ss;
-  for (unsigned int i = 0; i < modelTraits.electrodeconfiguration.no_electrodes; i++)
+  if (config.template get<bool>("models.ERT"))
   {
-    std::string name = "ERT_" + std::to_string(i); // name for the n-th model is ERT_n
-    if (!modelTraits.basePotentialEvaluation)
-      forwardModelList.add<GeoelectricsModel,TransportModel>(name,std::list<std::string>{"soluteTransport"});
-    else
-      forwardModelList.add<GeoelectricsModel>(name); // if this is base potential evaluation -> concentration is irrelevant
+    // generate N geoelectrics models for N electrodes
+    std::stringstream temp_ss;
+    for (unsigned int i = 0; i < modelTraits.electrodeconfiguration.no_electrodes; i++)
+    {
+      std::string name = "ERT_" + std::to_string(i); // name for the n-th model is ERT_n
+      if (!modelTraits.basePotentialEvaluation)
+        forwardModelList.add<GeoelectricsModel,TransportModel>(name,std::list<std::string>{"soluteTransport"});
+      else
+        forwardModelList.add<GeoelectricsModel>(name); // if this is base potential evaluation -> concentration is irrelevant
+    }
   }
   
   // print information about model list
@@ -109,10 +116,10 @@ void transient(int argc, char** argv, bool evaluateBasePotentials,std::string in
   // if desired, output is unified from one file/processor to a single file
   if (helper.rank()== 0 && modelTraits.config().template get<bool>("output.unify_parallel_results",false))
   {
-    if (modelTraits.config().template get<bool>("output.writeERT",false))
+    if (config.template get<bool>("models.ERT") && modelTraits.config().template get<bool>("output.writeERT",false))
       unify_ERT_results<ModelTraits>(&modelTraits);
 
-    if (modelTraits.config().template get<bool>("output.writeTransport",false) && !modelTraits.basePotentialEvaluation)
+    if (config.template get<bool>("models.transport") && modelTraits.config().template get<bool>("output.writeTransport_at_electrodes_for_ERT_times",false) && !modelTraits.basePotentialEvaluation)
       unify_transport_results<ModelTraits>(&modelTraits);
   }
 
