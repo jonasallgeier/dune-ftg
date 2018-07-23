@@ -548,7 +548,7 @@ class ModelTraits
         : traits(traits_)
       {
         writeERT              = traits.config().template get<bool>("output.writeERT",false); 
-        writeTransport        = traits.config().template get<bool>("output.writeTransport",false); 
+        writeTransport        = traits.config().template get<bool>("output.writeTransport_at_electrodes_for_ERT_times",false); 
         writeMomentsTransport = traits.config().template get<bool>("output.writeMomentsTransport",false);
         writeMomentsERT       = traits.config().template get<bool>("output.writeMomentsERT",false);
         writeFlow             = traits.config().template get<bool>("output.writeFlow",false);      
@@ -692,7 +692,7 @@ class ModelTraits
             std::map<unsigned int, RF> current_output;
             unsigned int no_electrodes = extraction_helper<Storage>(current_output,storage,time); // get the results of this model
             
-            std::string filenamebase = traits.config().template get<std::string>("output.writeTransport_at_electrodes_for_ERT_times","resultsTransport");
+            std::string filenamebase = traits.config().template get<std::string>("output.writeTransportFilename","resultsTransport");
             if (traits.rank() == 0)
             {
               std::cout << "printing concentration results" << std::endl;
@@ -701,10 +701,10 @@ class ModelTraits
               std::ofstream timefile;
               std::string timefilename = filenamebase + ".times";
 
-              if (clearFiles_MomentsTransport)
+              if (clearFiles_Transport)
               { 
                 timefile.open(timefilename, std::ios::out | std::ios::trunc); // clear the file
-                clearFiles_MomentsTransport = false;
+                clearFiles_Transport = false;
                 timefile << "electrodes " << no_electrodes << std::endl;
                 timefile << "processors " << traits.helper.size() << std::endl;
                 timefile << "times ";
@@ -771,10 +771,10 @@ class ModelTraits
               std::ofstream timefile;
               std::string timefilename = filenamebase + ".moments";
 
-              if (clearFiles_Transport)
+              if (clearFiles_MomentsTransport)
               { 
                 timefile.open(timefilename, std::ios::out | std::ios::trunc); // clear the file
-                clearFiles_Transport = false;
+                clearFiles_MomentsTransport = false;
                 timefile << "electrodes " << no_electrodes << std::endl;
                 timefile << "processors " << traits.helper.size() << std::endl;
                 timefile << "moments";
