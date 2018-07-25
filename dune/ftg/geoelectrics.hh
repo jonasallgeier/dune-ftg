@@ -126,6 +126,16 @@ namespace Dune {
             return localConcentration[0];
           }
 
+        template<typename Element, typename Domain, typename Time>
+          auto potential_gradient(const Element& elem, const Domain& x, const Time& time) const
+          {
+            typename Traits::GridTraits::Vector localGrad;
+            //const auto& global  = elem.geometry().global(x);
+            //const auto& xInside = elem.geometry().local(global);
+            (*forwardStorage).gradient(time,elem,x,localGrad);
+            return localGrad;
+          }
+
         // electrical conductivity based on concentration transformation in each element
         template<typename Element, typename Domain, typename Time>
           RF cond (const Element& elem, const Domain& x, const Time& time) const
@@ -160,49 +170,6 @@ namespace Dune {
 
             // apply stabilization: set values below 0.5*sigma_bg -> 0.5*sigma_bg 
             return (el_cond < 0.5*sigma_bg[0] ? 0.5*sigma_bg[0] : el_cond);
-          }
-
-        /**
-         * @brief Water flux across given interface
-         */
-        template<typename Intersection, typename IDomain, typename Time>
-          RF flux(const Intersection& is, const IDomain& x, const Time& time) const
-          {
-            typename Traits::GridTraits::Vector localFlux;
-            const auto& global  = is.geometry().global(x);
-            const auto& xInside = is.inside().geometry().local(global);
-            (*forwardStorage).flux(time,is.inside(),xInside,localFlux);
-
-            return localFlux * is.unitOuterNormal(x);
-          }
-
-        /**
-         * @brief Maximum water flux on element (for CFL condition)
-         */
-        template<typename Element, typename Time>
-          RF maxFluxNorm(const Element& elem, const Time& time) const
-          {
-            RF output = 0.;
-            typename Traits::GridTraits::Vector localFlux;
-
-            Dune::GeometryType type = elem.geometry().type();
-            const auto& rule = Dune::QuadratureRules
-              <typename Traits::GridTraits::DomainField, Traits::GridTraits::dim>::rule(type, 1);
-
-            // loop over quadrature points 
-            for(const auto& point : rule) 
-            {
-              const auto& x = point.position();
-              (*forwardStorage).flux(time,elem,x,localFlux);
-              RF norm = 0.;
-              for (const auto& entry : localFlux)
-                norm += entry*entry;
-              norm = std::sqrt(norm);
-
-              output = std::max(output,norm);
-            }
-
-            return output;
           }
 
         /**
@@ -324,7 +291,7 @@ namespace Dune {
           {}
           
           template<typename Element, typename Domain, typename Time>
-            auto q (const Element& elem, const Domain& x, const Time& t) const
+            auto I (const Element& elem, const Domain& x, const Time& t) const
             {
               using RF = typename Traits::GridTraits::RangeField;
               
@@ -455,7 +422,7 @@ namespace Dune {
           void lambda_volume (const EG& eg, const LFSV& lfsv, R& r) const
           {
             const Domain& cellCenterLocal = referenceElement(eg.geometry()).position(0,0);
-            r.accumulate(lfsv,0, - sourceTerm.q(eg.entity(),cellCenterLocal,time));
+            r.accumulate(lfsv,0, -sourceTerm.I(eg.entity(),cellCenterLocal,time));
           }
 
         /**

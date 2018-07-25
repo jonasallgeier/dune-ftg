@@ -36,6 +36,7 @@ namespace Dune {
 
         std::shared_ptr<const ModelParameters<Traits,ModelTypes::Moments_c> > c_momentParams;
         std::shared_ptr<const ModelParameters<Traits,ModelTypes::Geoelectrics> > geoelectricsParams;
+        std::shared_ptr<const ModelParameters<Traits,ModelTypes::Groundwater> > groundwaterParams;
 
         public:
           unsigned int model_number;
@@ -153,6 +154,15 @@ namespace Dune {
             return (*c_momentParams).moment(elem,x,time);
           }
 
+        template<typename Intersection, typename IDomain, typename Time>
+          RF vNormal (const Intersection& is, const IDomain& x, const Time& t) const
+          {
+            if (!groundwaterParams)
+              DUNE_THROW(Dune::Exception,"groundwater model parameters not set in transport model parameters");
+            
+            return (*groundwaterParams).flux(is,x,t);
+          }
+
         template<typename Element, typename Domain, typename Time>
           RF el_potential(const Element& elem, const Domain& x, const Time& time) const
           {
@@ -160,6 +170,15 @@ namespace Dune {
               DUNE_THROW(Dune::Exception,"geoelectrics parameters not set in ERT moment model parameters");
             
             return (*geoelectricsParams).potential(elem,x,time);
+          }
+
+        template<typename Element, typename Domain, typename Time>
+          auto potential_gradient(const Element& elem, const Domain& x, const Time& time) const
+          {
+            if (!geoelectricsParams)
+              DUNE_THROW(Dune::Exception,"geoelectrics parameters not set in ERT moment model parameters");
+            
+            return (*geoelectricsParams).potential_gradient(elem,x,time);
           }
 
 
@@ -172,6 +191,14 @@ namespace Dune {
             )
         {
           c_momentParams = otherParams;
+        }
+
+        void registerModel(
+            const std::string& name, 
+            const std::shared_ptr<ModelParameters<Traits,ModelTypes::Groundwater> >& otherParams
+            )
+        {
+          groundwaterParams = otherParams;
         }
 
         void registerModel(
@@ -292,12 +319,9 @@ namespace Dune {
      */
     template<typename Traits, typename DirectionType>
       class SpatialOperator<Traits, typename ModelTypes::Moments_ERT, Discretization::CellCenteredFiniteVolume, DirectionType>
-      : public Dune::PDELab::NumericalJacobianSkeleton
-      <SpatialOperator<Traits, ModelTypes::Moments_ERT, Discretization::CellCenteredFiniteVolume, DirectionType> >,
-      public Dune::PDELab::NumericalJacobianBoundary
-        <SpatialOperator<Traits, ModelTypes::Moments_ERT, Discretization::CellCenteredFiniteVolume, DirectionType> >,
-      public Dune::PDELab::NumericalJacobianVolume
-      <TemporalOperator<Traits, ModelTypes::Moments_ERT, Discretization::CellCenteredFiniteVolume, DirectionType> >,
+      : public Dune::PDELab::NumericalJacobianSkeleton<SpatialOperator<Traits, ModelTypes::Moments_ERT, Discretization::CellCenteredFiniteVolume, DirectionType> >,
+      public Dune::PDELab::NumericalJacobianBoundary<SpatialOperator<Traits, ModelTypes::Moments_ERT, Discretization::CellCenteredFiniteVolume, DirectionType> >,
+      public Dune::PDELab::NumericalJacobianVolume<SpatialOperator<Traits, ModelTypes::Moments_ERT, Discretization::CellCenteredFiniteVolume, DirectionType> >,
       public Dune::PDELab::FullSkeletonPattern, 
       public Dune::PDELab::FullVolumePattern,
       public Dune::PDELab::LocalOperatorDefaultFlags,
@@ -316,9 +340,12 @@ namespace Dune {
         enum {doPatternSkeleton = true};
 
         // residual assembly flags
-        enum {doAlphaVolume   = true};
-        enum {doAlphaSkeleton = true};
-        enum {doAlphaBoundary = true};
+        enum {doAlphaVolume    = false};
+        enum {doAlphaSkeleton  = true};
+        enum {doAlphaBoundary  = true};
+        enum {doLambdaVolume   = false};
+        enum {doLambdaSkeleton = true};
+        enum {doLambdaBoundary = true};
 
         private:
 
@@ -347,14 +374,6 @@ namespace Dune {
         }
 
         /**
-         * @brief Volume integral depending on test and ansatz functions
-         */
-        template<typename EG, typename LFSU, typename X, typename LFSV, typename R>
-          void alpha_volume (const EG& eg, const LFSU& lfsu, const X& x, const LFSV& lfsv, R& r) const
-          {
-          }
-
-        /**
          * @brief Skeleton integral depending on test and ansatz functions
          */
         // each face is only visited ONCE!
@@ -372,23 +391,10 @@ namespace Dune {
             const RF sigma_outside = parameters.sigma(ig.intersection().outside(),cellCenterOutside,time);
             const RF sigma_0 = havg(sigma_inside,sigma_outside);
 
-            RF left_part = faceVolume * sigma_0 * skeletonNormalDerivative(ig.intersection(),x_s(lfsu_s,0),x_n(lfsu_n,0));
+            RF left_part = - sigma_0 * skeletonNormalDerivative(ig.intersection(),x_s(lfsu_s,0),x_n(lfsu_n,0)) * faceVolume;
 
-            const RF c_moment_inside  = parameters.c_moment(ig.intersection().inside(),cellCenterInside,time);
-            const RF c_moment_outside = parameters.c_moment(ig.intersection().outside(),cellCenterOutside,time);
-            const RF c_moment = havg(c_moment_inside,c_moment_outside);
-
-            const RF kappa_inside  = parameters.kappa(ig.intersection().inside(),cellCenterInside,time);
-            const RF kappa_outside = parameters.kappa(ig.intersection().outside(),cellCenterOutside,time);
-            const RF kappa = havg(kappa_inside,kappa_outside);     
-
-            const RF potential_inside  = parameters.el_potential(ig.intersection().inside(),cellCenterInside,time);
-            const RF potential_outside = parameters.el_potential(ig.intersection().outside(),cellCenterOutside,time);
-
-            RF right_part = faceVolume * kappa * c_moment * skeletonNormalDerivative(ig.intersection(),potential_inside,potential_outside);
-
-            r_s.accumulate(lfsv_s,0,   left_part+right_part  );
-            r_n.accumulate(lfsv_n,0, -(left_part+right_part) );
+            r_s.accumulate(lfsv_s,0,  left_part);
+            r_n.accumulate(lfsv_n,0, -left_part);
           }
 
         /**
@@ -400,19 +406,89 @@ namespace Dune {
               const LFSU& lfsu_s, const X& x_s, const LFSV& lfsv_s,
               R& r_s) const
           {
-            const IDomain& faceCenterLocal = referenceElement(ig.geometry()).position(0,0);
-
             // evaluate boundary condition type
+            const IDomain& faceCenterLocal = referenceElement(ig.geometry()).position(0,0);
             Dune::Modelling::BoundaryCondition::Type bc = boundary.bc(ig.intersection(),faceCenterLocal,time);
             if (!Dune::Modelling::BoundaryCondition::isDirichlet(bc))
               return;
 
             // Dirichlet boundary conditions
-            const RF normalFlux = dirichletNormalFlux(ig.intersection(),x_s(lfsu_s,0),time);
             const RF faceVolume = ig.geometry().volume();
+            const Domain&  cellCenterInside = referenceElement(ig.intersection().inside().geometry()).position(0,0);
 
-            r_s.accumulate(lfsv_s,0, normalFlux * faceVolume);
+            const RF sigma_0 = parameters.sigma(ig.intersection().inside(),cellCenterInside,time);
+            
+            RF left_part = - sigma_0 * dirichletNormalDerivative(ig.intersection(),x_s(lfsu_s,0),time)*faceVolume;
+
+            r_s.accumulate(lfsv_s,0, left_part);
           }
+
+        template<typename IG, typename LFSV, typename R>
+          void lambda_boundary (const IG& ig, const LFSV& lfsv, R& r_s) const
+          {
+            // evaluate boundary condition type
+            const IDomain& faceCenterLocal = referenceElement(ig.geometry()).position(0,0);
+            Dune::Modelling::BoundaryCondition::Type bc = boundary.bc(ig.intersection(),faceCenterLocal,time);
+
+            // Neumann boundary condition
+            if (Dune::Modelling::BoundaryCondition::isNeumann(bc))
+            {
+              const RF j = boundary.j(ig.intersection(),faceCenterLocal,time);
+              const RF faceVolume = ig.geometry().volume();
+              r_s.accumulate(lfsv,0, j * faceVolume);
+              return;
+            }
+            if (Dune::Modelling::BoundaryCondition::isDirichlet(bc))
+            {
+              const RF faceVolume = ig.geometry().volume();
+              const Domain& cellCenterInside  = referenceElement(ig.intersection().inside() .geometry()).position(0,0);
+              
+              const RF c_moment_inside  = parameters.c_moment(ig.intersection().inside(),cellCenterInside,time);
+              //const RF c_moment_outside = parameters.c_moment(ig.intersection().outside(),cellCenterOutside,time);
+              const RF v = parameters.vNormal(ig.intersection(),faceCenterLocal,time);
+              const RF c_moment = (v >= 0) ? c_moment_inside : 0; // upwinding
+              //const RF c_moment = c_moment_inside;
+              const RF kappa  = parameters.kappa(ig.intersection().inside(),cellCenterInside,time);
+
+              const Domain& faceCenterGlobal = ig.intersection().geometry().global(faceCenterLocal);
+              const auto& faceCenterLocal = ig.intersection().inside().geometry().local(faceCenterGlobal);
+
+              auto gradient_potential = parameters.potential_gradient(ig.intersection().inside(),faceCenterLocal,time);
+
+              auto gradient_normal = ig.centerUnitOuterNormal()*gradient_potential;
+              RF right_part = - kappa * c_moment * gradient_normal * faceVolume;
+              r_s.accumulate(lfsv,0, right_part);
+              return;
+            }
+          }
+
+        template<typename IG, typename LFSV, typename R>
+          void lambda_skeleton (const IG& ig, const LFSV& lfsv_s, const LFSV& lfsv_n, R& r_s, R& r_n) const
+          {
+            const RF faceVolume = ig.geometry().volume();
+            const IDomain& faceCenterLocal = referenceElement(ig.geometry()).position(0,0);
+            const Domain& cellCenterInside  = referenceElement(ig.intersection().inside() .geometry()).position(0,0);
+            const Domain& cellCenterOutside = referenceElement(ig.intersection().outside().geometry()).position(0,0);
+            
+            const RF c_moment_inside  = parameters.c_moment(ig.intersection().inside(),cellCenterInside,time);
+            const RF c_moment_outside = parameters.c_moment(ig.intersection().outside(),cellCenterOutside,time);
+            const RF v = parameters.vNormal(ig.intersection(),faceCenterLocal,time);
+            const RF c_moment = (v >= 0) ? c_moment_inside : c_moment_outside; // upwinding
+            //const RF c_moment = havg(c_moment_inside,c_moment_outside);
+
+            const RF kappa_inside  = parameters.kappa(ig.intersection().inside(),cellCenterInside,time);
+            const RF kappa_outside = parameters.kappa(ig.intersection().outside(),cellCenterOutside,time);
+            const RF kappa = havg(kappa_inside,kappa_outside);     
+
+            const RF potential_inside  = parameters.el_potential(ig.intersection().inside(),cellCenterInside,time);
+            const RF potential_outside = parameters.el_potential(ig.intersection().outside(),cellCenterOutside,time);
+
+            RF right_part = - kappa * c_moment * skeletonNormalDerivative(ig.intersection(),potential_inside,potential_outside) * faceVolume;
+
+            r_s.accumulate(lfsv_s,0,  right_part);
+            r_n.accumulate(lfsv_n,0, -right_part);
+          }
+
 
         /**
          * @brief Set time for subsequent evaluation
@@ -441,21 +517,6 @@ namespace Dune {
             const RF w = (outerValue - innerValue)/distance;
 
             return w;
-          }
-
-        /**
-         * @brief Flux in normal direction on Dirichlet boundary
-         */
-        template<typename Intersection>
-          RF dirichletNormalFlux(const Intersection& is, RF innerValue, RF time) const
-          {
-            // geometry information
-            const Domain&  cellCenterInside = referenceElement(is.inside().geometry()).position(0,0);
-
-            // conductivity
-            const RF sigma_0 = parameters.sigma(is.inside(),cellCenterInside,time);
-
-            return sigma_0 * dirichletNormalDerivative(is,innerValue,time);
           }
 
         /**
@@ -488,56 +549,6 @@ namespace Dune {
             T eps = 1e-30;
             return 2./(1./(a + eps) + 1./(b + eps));
           }
-      };
-
-    /**
-     * @brief Temporal local operator of the convection-diffusion equation (CCFV version)
-     */
-    template<typename Traits, typename DirectionType>
-      class TemporalOperator<Traits, typename ModelTypes::Moments_ERT,
-            Discretization::CellCenteredFiniteVolume, DirectionType>
-      : public Dune::PDELab::NumericalJacobianVolume
-      <TemporalOperator<Traits, ModelTypes::Moments_ERT, Discretization::CellCenteredFiniteVolume, DirectionType> >,
-      public Dune::PDELab::FullVolumePattern,
-      public Dune::PDELab::LocalOperatorDefaultFlags,
-      public Dune::PDELab::InstationaryLocalOperatorDefaultMethods<typename Traits::GridTraits::RangeField>
-
-      {
-        using RF = typename Traits::GridTraits::RangeField;
-
-        public:
-
-        // pattern assembly flags
-        enum {doPatternVolume = true};
-
-        // residual assembly flags
-        enum {doAlphaVolume = true};
-
-        private:
-
-        public:
-
-        /**
-         * @brief Constructor
-         */
-        TemporalOperator(
-            const Traits& traits,
-            const ModelParameters<Traits,ModelTypes::Moments_ERT>& parameters
-            ) 
-        {}
-
-        /**
-         * @brief Volume integral depending on test and ansatz functions
-         */
-        template<typename EG, typename LFSU, typename X, typename LFSV, typename R>
-          void alpha_volume (const EG& eg, const LFSU& lfsu, const X& x, const LFSV& lfsv, R& r) const
-          {}
-
-        RF suggestTimestep (RF dt) const
-        {
-          return std::numeric_limits<RF>::max();
-        }
-
       };
   }
 }

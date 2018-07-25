@@ -408,7 +408,7 @@ namespace Dune {
           }
 
           template<typename Element, typename Domain, typename Time>
-            auto q (const Element& elem, const Domain& x, const Time& t) const
+            auto Q (const Element& elem, const Domain& x, const Time& t) const
             {
               unsigned int current_index = parameters.index_set().index(elem);
               auto temp = well_cells.find(current_index);
@@ -546,7 +546,7 @@ namespace Dune {
           void lambda_volume (const EG& eg, const LFSV& lfsv, R& r) const
           {
             const Domain& cellCenterLocal = referenceElement(eg.geometry()).position(0,0);
-            r.accumulate(lfsv,0, - sourceTerm.q(eg.entity(),cellCenterLocal,time));
+            r.accumulate(lfsv,0, - sourceTerm.Q(eg.entity(),cellCenterLocal,time));
           }
 
         /**

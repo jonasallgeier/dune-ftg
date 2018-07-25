@@ -90,7 +90,7 @@ void moments(int argc, char** argv,std::string inifile_name)
         std::string model_name = "momentsERT_" + std::to_string(i) + "_" + std::to_string(j); // example: momentsERT_42_1 -> 1st moment, 42nd electrode
         std::string c_model_name = "momentsTransport_"    + std::to_string(j);
         std::string ERT_model_name = "ERT_" + std::to_string(i);
-        forwardModelList.add<Moments_ERT_Model,Moments_c_Model,GeoelectricsModel>(model_name,std::list<std::string>{c_model_name,ERT_model_name});
+        forwardModelList.add<Moments_ERT_Model,Moments_c_Model,GeoelectricsModel,GroundwaterModel>(model_name,std::list<std::string>{c_model_name,ERT_model_name,"groundwaterFlow"});
       }
     }
   }

@@ -187,12 +187,12 @@ void unify_ERT_results(auto modelTraits)
       infile >> temp;
       infile >> temp;
 
-      unsigned int injection_electrode;
-      unsigned int measured_electrode;
-      RF potential;
-
       while ( !infile.eof() )
       {
+        unsigned int injection_electrode = 0;
+        unsigned int measured_electrode = 0;
+        RF potential;
+
         infile >> injection_electrode;
         infile >> measured_electrode;
         infile >> potential;
@@ -270,8 +270,9 @@ void unify_transport_results(auto modelTraits)
 
       while ( !infile.eof() )
       {
-        unsigned int electrode;
+        unsigned int electrode = 0;
         RF concentration;
+
         infile >> electrode;
         infile >> concentration;
         if ( (electrode >= 1) && (electrode <= no_electrodes) )
@@ -333,7 +334,7 @@ void unify_momentsTransport_results(auto modelTraits)
 
       while ( !infile.eof() )
       {
-        unsigned int electrode;
+        unsigned int electrode = 0;
         RF momentTransport;
         infile >> electrode;
         infile >> momentTransport;
@@ -398,20 +399,24 @@ void unify_momentsERT_results(auto modelTraits)
       infile >> temp;
       infile >> temp;
 
-      unsigned int injection_electrode;
-      unsigned int measured_electrode;
-      RF value;
+
 
       while ( !infile.eof() )
-      {
+      { 
+        unsigned int injection_electrode = 0;
+        unsigned int measured_electrode = 0;
+        RF value;
+
         infile >> injection_electrode;
         infile >> measured_electrode;
         infile >> value;
 
-        std::pair<unsigned int, unsigned int> key;
-        key = std::make_pair(injection_electrode,measured_electrode);
-
-        complete_map.insert(std::pair<std::pair<unsigned int, unsigned int>, RF >(key, value));
+        if ( (injection_electrode >= 1) && (injection_electrode <= no_electrodes) && (measured_electrode >= 1) && (measured_electrode <= no_electrodes))
+        {
+          std::pair<unsigned int, unsigned int> key;
+          key = std::make_pair(injection_electrode,measured_electrode);
+          complete_map.insert(std::pair<std::pair<unsigned int, unsigned int>, RF   >(key, value));
+        }
       }
       infile.close();
       remove(infilename.c_str());

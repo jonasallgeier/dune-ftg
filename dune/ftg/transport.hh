@@ -33,12 +33,18 @@ namespace Dune {
         std::shared_ptr<ParameterField> porosityField;
         std::shared_ptr<const ModelParameters<Traits,ModelTypes::Groundwater> > groundwaterParams;
 
+        RF c_in_private;
+        RF t_in_private;
+
         public:
           unsigned int model_number = 0;
 
         ModelParameters(const Traits& traits_, const std::string& name)
           : ModelParametersBase<Traits>(name), traits(traits_)
-        {}
+        {
+            c_in_private = traits.config().template get<RF>("tracer.c_in");
+            t_in_private = traits.config().template get<RF>("tracer.t_in");
+        }
 
         /**
          * @brief Model parameters should exist only once per (named) model
@@ -136,6 +142,17 @@ namespace Dune {
             RF v= (*groundwaterParams).flux(is,x,t)/porosity(global);
             return v; // division by porosity!
           }
+
+
+        RF c_in () const
+        {
+          return c_in_private;
+        }
+
+        RF t_in () const
+        {
+          return t_in_private;
+        }
 
         /**
          * @brief Constant for diffusive flux contribution
@@ -291,50 +308,35 @@ namespace Dune {
         typename Traits::GridTraits::Grid::LeafGridView  lgv;
         using RF = typename Traits::GridTraits::RangeField;
         using IDomain = typename Traits::GridTraits::IDomain;
-        RF c_in;
-        RF t_in;
+        //RF c_in;
+        //RF t_in;
         std::map<unsigned int, std::pair<RF, bool>> well_cells;
 
         public:
 
           SourceTerm(const Traits& traits_, const ModelParameters<Traits,ModelTypes::Transport>& parameters_) : traits(traits_), parameters(parameters_), lgv(traits_.grid().leafGridView()) 
           {
-            c_in = traits.config().template get<RF>("tracer.c_in");
-            t_in = traits.config().template get<RF>("tracer.t_in");
+            //c_in = traits.config().template get<RF>("tracer.c_in");
+            //t_in = traits.config().template get<RF>("tracer.t_in");
             well_cells = parameters.well_cells();
           }
 
-          template<typename Element, typename Domain, typename Value, typename Time>
-            auto q (const Element& elem, const Domain& x, const Value& value, const Time& t) const
+          template<typename Element, typename Domain>
+            RF Q (const Element& elem, const Domain& x, bool & tracer_injection) const
             {
               // get the index of the current cell
               unsigned int current_index = lgv.indexSet().index(elem);
               auto temp = well_cells.find(current_index);
 
+              RF rate = 0.0;
+
               if ( !(temp->first == well_cells.end()->first) ) //  current cell is a well cell 
               {  
-                RF rate = (temp->second).first;
-                
-                if ( rate < 0.0) // an extraction well cell
-                {
-                  /*
-                  for ( const auto & is : intersections(lgv,elem))
-                  {
-                    if (is.neighbor()) 
-                    {
-                      std::cout << "this is an extraction well not at a boundary" << std::endl; 
-                    }
-                  }
-                  */
-                  return rate*value; // rate multiplied with concentration
-                } 
-                else if ( (temp->second).second == true && t <= t_in) // a tracer injection cell
-                {
-                  return rate*c_in; // rate multiplied with concentration
-                }
+                rate = (temp->second).first;
+                if ((temp->second).second == true)
+                  tracer_injection = true;
               }
-              // if we end up here, this cell is neither a concentration source nor sink
-              return 0.0;
+              return rate;
             }
       };
 
@@ -354,12 +356,10 @@ namespace Dune {
     template<typename Traits, typename DirectionType>
       class SpatialOperator<Traits, typename ModelTypes::Transport,
             Discretization::CellCenteredFiniteVolume, DirectionType>
-      : public Dune::PDELab::NumericalJacobianSkeleton<SpatialOperator
-      <Traits, ModelTypes::Transport, Discretization::CellCenteredFiniteVolume, DirectionType> >,
-      public Dune::PDELab::NumericalJacobianVolume
-        <SpatialOperator<Traits, ModelTypes::Transport, Discretization::CellCenteredFiniteVolume, DirectionType> >,
-      public Dune::PDELab::NumericalJacobianBoundary
-        <SpatialOperator<Traits, ModelTypes::Transport, Discretization::CellCenteredFiniteVolume, DirectionType> >,
+      : 
+      public Dune::PDELab::NumericalJacobianSkeleton<SpatialOperator<Traits, ModelTypes::Transport, Discretization::CellCenteredFiniteVolume, DirectionType> >,
+      public Dune::PDELab::NumericalJacobianVolume<SpatialOperator<Traits, ModelTypes::Transport, Discretization::CellCenteredFiniteVolume, DirectionType> >,
+      public Dune::PDELab::NumericalJacobianBoundary<SpatialOperator<Traits, ModelTypes::Transport, Discretization::CellCenteredFiniteVolume, DirectionType> >,
       public Dune::PDELab::FullSkeletonPattern, 
       public Dune::PDELab::FullVolumePattern,
       public Dune::PDELab::LocalOperatorDefaultFlags,
@@ -381,8 +381,9 @@ namespace Dune {
         enum {doAlphaVolume   = true};
         enum {doAlphaSkeleton = true};
         enum {doAlphaBoundary = true};
+        enum {doLambdaVolume = true};
         //enum {doLambdaSkeleton = false};
-        //enum {doLambdaBoundary = false};
+        enum {doLambdaBoundary = true};
 
         private:
 
@@ -394,9 +395,9 @@ namespace Dune {
 
         RF time;
 
-        mutable bool firstStage = true;
-        mutable RF dtmin;
-        mutable RF dt_min_CFL;
+        //mutable bool firstStage = true;
+        //mutable RF dtmin;
+        //mutable RF dt_min_CFL;
 
         public:
 
@@ -416,10 +417,68 @@ namespace Dune {
         template<typename EG, typename LFSU, typename X, typename LFSV, typename R>
           void alpha_volume (const EG& eg, const LFSU& lfsu, const X& x, const LFSV& lfsv, R& r) const
           {
-            // contribution from source term
+            // contribution from sink term
             const Domain& cellCenterLocal = referenceElement(eg.geometry()).position(0,0);
-            auto value = x(lfsu,0);
-            r.accumulate(lfsv,0,-sourceTerm.q(eg.entity(),cellCenterLocal,value,time)/parameters.porosity(cellCenterLocal));
+            bool tracer_injection = false;
+            RF Q = sourceTerm.Q(eg.entity(),cellCenterLocal,tracer_injection);
+            
+            const RF source = (Q < 0) ? -Q*x(lfsu,0)/parameters.porosity(cellCenterLocal) : 0;
+            r.accumulate(lfsv,0,source);
+          }
+
+        /**
+         * @brief Volume integral depending only on test functions (source term)
+         */
+        template<typename EG, typename LFSV, typename R>
+          void lambda_volume (const EG& eg, const LFSV& lfsv, R& r) const
+          {
+            // contribution from source term
+            
+            RF source = 0.0;
+            if (time <= parameters.t_in())
+            {
+              const Domain& cellCenterLocal = referenceElement(eg.geometry()).position(0,0);
+              bool tracer_injection = false;
+              RF Q = sourceTerm.Q(eg.entity(),cellCenterLocal,tracer_injection);
+              if (tracer_injection==true)
+                source = (Q > 0) ? -Q*parameters.c_in()/parameters.porosity(cellCenterLocal) : 0;
+            } 
+            r.accumulate(lfsv,0,source);
+          }
+
+        template<typename IG, typename LFSV, typename R>
+          void lambda_boundary (const IG& ig, const LFSV& lfsv, R& r_s) const
+          {
+            /*
+            // contribute to timestep calculation
+            if (firstStage)
+            {
+              // compute minimum local mesh width h
+              const RF faceVolume   = ig         .geometry().volume();
+              const RF insideVolume = ig.inside().geometry().volume();
+                  
+              const RF distance = insideVolume/faceVolume;
+
+              // compute maximum local velocity |v|
+              const RF maxVelocity = parameters.maxVelocity(ig.inside(),time);
+              RF dt_CFL = parameters.dt_CFL(ig.inside(),time);
+              // update minimum of admissable timesteps
+              dtmin = std::min(dtmin,distance/maxVelocity);
+              dt_min_CFL = std::min(dt_min_CFL,dt_CFL);
+            }
+            */
+
+            // evaluate boundary condition type
+            const IDomain& faceCenterLocal = referenceElement(ig.geometry()).position(0,0);
+            Dune::Modelling::BoundaryCondition::Type bc = boundary.bc(ig.intersection(),faceCenterLocal,time);
+
+            // Neumann boundary condition
+            if (Dune::Modelling::BoundaryCondition::isNeumann(bc))
+            {
+              const RF faceVolume = ig.geometry().volume();
+              const RF j = boundary.j(ig.intersection(),faceCenterLocal,time);
+              r_s.accumulate(lfsv,0, j * faceVolume);
+            }
           }
 
         /**
@@ -432,6 +491,7 @@ namespace Dune {
               const LFSU& lfsu_n, const X& x_n, const LFSV& lfsv_n, 
               R& r_s, R& r_n) const
           {
+            /*
             // contribute to timestep calculation
             if (firstStage)
             {
@@ -457,6 +517,7 @@ namespace Dune {
               dt_min_CFL = std::min(dt_min_CFL,dt_CFL);
               dtmin = std::min(dtmin,distance/maxVelocity);
             }
+            */
 
             const RF normalFlux = skeletonNormalFlux(ig.intersection(),x_s(lfsu_s,0),x_n(lfsu_n,0),time);
             const RF faceVolume = ig.geometry().volume();
@@ -474,6 +535,7 @@ namespace Dune {
               const LFSU& lfsu_s, const X& x_s, const LFSV& lfsv_s,
               R& r_s) const
           {
+            /*
             // contribute to timestep calculation
             if (firstStage)
             {
@@ -490,21 +552,11 @@ namespace Dune {
               dtmin = std::min(dtmin,distance/maxVelocity);
               dt_min_CFL = std::min(dt_min_CFL,dt_CFL);
             }
-            
+            */
+
+            // evaluate boundary condition type           
             const IDomain& faceCenterLocal = referenceElement(ig.geometry()).position(0,0);
-            const RF faceVolume = ig.geometry().volume();
-
-            // evaluate boundary condition type
             Dune::Modelling::BoundaryCondition::Type bc = boundary.bc(ig.intersection(),faceCenterLocal,time);
-
-            // Neumann boundary condition
-            if (Dune::Modelling::BoundaryCondition::isNeumann(bc))
-            {
-              const RF j = boundary.j(ig.intersection(),faceCenterLocal,time);
-              r_s.accumulate(lfsu_s,0, j * faceVolume);
-              
-              return;
-            }
 
             // Dirichlet boundary condition
             if (Dune::Modelling::BoundaryCondition::isDirichlet(bc))
@@ -513,15 +565,7 @@ namespace Dune {
               const RF faceVolume = ig.geometry().volume();
 
               r_s.accumulate(lfsv_s,0, normalFlux * faceVolume);
-
-              return;
             }
-
-            // Outflow boundary condition
-
-            // advection velocity
-            const RF v = parameters.vNormal(ig.intersection(),faceCenterLocal,time);
-            r_s.accumulate(lfsu_s,0, v * x_s(lfsu_s,0) * faceVolume);
           }
 
         /**
@@ -529,6 +573,7 @@ namespace Dune {
          */
         void preStage(RF time, int r)
         {
+          /*
           if (r == 1)
           {
             //firstStage = true; <- not needed here, as groundwater flow is stationary; one evaluation sufficient
@@ -537,6 +582,7 @@ namespace Dune {
           }
           else
             firstStage = false;
+          */
         }
 
         /**
@@ -667,7 +713,7 @@ namespace Dune {
         /**
          * @brief Suggest timestep based on CFL condition
          */
-        RF suggestTimestep(RF dt) const
+        /*RF suggestTimestep(RF dt) const
         {
             //std::cout << "Suggested time step: " << traits.comm().min(dt_min_CFL) << "s" << std::endl; // <- the other CFL implementation works better
             if (firstStage)
@@ -676,7 +722,7 @@ namespace Dune {
               firstStage = false;
             }
             return traits.comm().min(dt_min_CFL);
-        }
+        }*/
 
         private:
 
