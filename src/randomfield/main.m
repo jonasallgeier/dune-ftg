@@ -2,7 +2,7 @@ clear variables
 close all
 home
 
-cm.number_of_processors = 2;
+cm.number_of_processors = 2; % averaging from fine to coarse grid is parallelized using parfor loops
 field_resolution = 'intermediate';
 
 % directory information
@@ -10,7 +10,7 @@ cm.outputfolder = ' ./'; % space in front is necessary!
 cm.outputtrunk = 'output/intermediate'; % all field files have this trunk in front of their name; it is not recommended to leave this empty
 cm.input = './input'; % all field files have this trunk in front of their name; it is not recommended to leave this empty
 
-cm.fieldgenerator_location = '../../../../../release-build/dune-randomfield/src/fieldgenerator';
+cm.fieldgenerator_location = '../../../../release-build/dune-randomfield/src/fieldgenerator';
 cm.vtk_out = false;
 
 cm.isequidistant = false;
